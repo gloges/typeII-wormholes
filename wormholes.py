@@ -80,7 +80,7 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-16, nr=1000):
         return [w0]
 
     # Use series solutions (e.g. u = u0 + 1/2*udd0 * r^2 + ...)
-    # to get initial conditions at 0 < rmin << q0
+    # to get initial conditions at r=rmin, where 0 < rmin << q0
     udd0 = 1/(q0**2 * w0) * ( 3/(2*q0**2) - (1/4)*V_S3S3(u0, φ0) + (1/12)*dVdu_S3S3(u0, φ0))
     φdd0 = 1/(q0**2 * w0) * (-3/q0**2     + (1/2)*V_S3S3(u0, φ0) +        dVdφ_S3S3(u0, φ0))
     wdd0 = -6/q0**4 + V_S3S3(u0, φ0)/q0**2 - (1/4)*udd0*dVdu_S3S3(u0, φ0) - (1/4)*φdd0*dVdφ_S3S3(u0, φ0)
@@ -95,7 +95,7 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-16, nr=1000):
 
     h_start = rmin / (q0**4 * np.sqrt(w0))
 
-    # ICs and constants
+    # Initial conditions and constants
     y0 = (w_start, u_start, ud_start, φ_start, φd_start, h_start)
     args = (q0, f4sqr)
 
@@ -111,32 +111,39 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-16, nr=1000):
     # Return (r, w, u, ud, φ, φd, h, f4sqr)
     return [soln.t, *soln.y, f4sqr]
 
-def objective_S3S3(uφ0, q0, rmax, rmin=10**-16, nr=1000):
+def objective_S3S3(uφ0, q0, rmax, rmin=10**-16, nr=1000, display_progress=False):
     """Objective function to be minimized during shooting method."""
 
     soln = solve_S3S3(q0, *uφ0, rmax, rmin)
 
     if len(soln) == 1:
         # Invlid (w0<0): return (const.)+|w0| to drive towards w0>0
-        return 10**8 + abs(soln[0])
+        if display_progress:
+            print('{:24.20f} {:24.20f}\t invalid'.format(*uφ0))
+
+        value = 10**8 + abs(soln[0])
     else:
         # Unpack solution
         r, w, u, ud, φ, φd, h, f4sqr = soln
         
         Δ1 = (3/2) + np.sqrt((3/2)**2 + 6)      # Conformal dimension for light mode
-        
 
         value = 1 + 10**3 * (rmax/r[-1] - 1)
 
         if r[-1] == rmax:
             value -= 1/(1 + ((u[-1] + 0.1*φ[-1]) + r[-1]*(ud[-1] + 0.1*φd[-1])/6)**2 \
                         + (φ[-1] + r[-1]*φd[-1]/Δ1)**2)
-            # print('{:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uφ0, r[-1], value))
+
+            if display_progress:
+                print('{:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uφ0, r[-1], value))
+
         else:
             value += u[-1]**2 + φ[-1]**2
-            # print('{:24.20f} {:24.20f}\tsingular: {:4.2f}\t{:46.40f}'.format(*uφ0, r[-1], value))
 
-        return value
+            if display_progress:
+                print('{:24.20f} {:24.20f}\tsingular: {:4.2f}\t{:46.40f}'.format(*uφ0, r[-1], value))
+
+    return value
 
 def paramScan_S3S3(q0, u0_list, φ0_list, rmax):
     """Returns objective function for a grid of u0,φ0 values."""
@@ -151,7 +158,7 @@ def paramScan_S3S3(q0, u0_list, φ0_list, rmax):
 
     return data
 
-def wormhole_S3S3(q0, rmax_list, uφ0=[0,0], xatol=10**-16, nr=1000):
+def wormhole_S3S3(q0, rmax_list, uφ0=[0,0], xatol=10**-16, nr=1000, display_progress=False):
     """Return optimal solution out to r=rmax for q0 and with r=0 boundary conditions found using shooting method."""
 
     uφ0_best = uφ0
@@ -159,13 +166,13 @@ def wormhole_S3S3(q0, rmax_list, uφ0=[0,0], xatol=10**-16, nr=1000):
     for rmax in rmax_list:
         # Shooting method: determine u0,φ0 to match boundary conditions/scaling solutions at r>>q0
         opt = minimize(objective_S3S3,
-                    args=(q0, rmax),
-                    x0=uφ0_best,
-                    method='Nelder-Mead',
-                    options={'maxfev': 1000,
-                             'xatol': xatol,
-                            }
-                    )
+                       args=(q0, rmax, display_progress),
+                       x0=uφ0_best,
+                       method='Nelder-Mead',
+                       options={'maxfev': 1000,
+                                'xatol': xatol,
+                               }
+                      )
         uφ0_best = opt.x
 
         # Print results
@@ -247,6 +254,7 @@ def ODEs_T11(r, y, q0, f3sqr):
 
     h_d = 1/(q**5 * np.sqrt(abs(w)))
 
+    # Return derivatives of w, u, ud, v, vd, φ, φd and h
     return w_d, u_d, ud_d, v_d, vd_d, φ_d, φd_d, h_d
 
 def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-4, nr=1000):
@@ -280,7 +288,7 @@ def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-4, nr=1000):
 
     h_start = rmin / (q0**5 * np.sqrt(w0))
 
-    # ICs and constants
+    # Initial conditions and constants
     y0 = (w_start, u_start, ud_start, v_start, vd_start, φ_start, φd_start, h_start)
     args = (q0, f3sqr)
 
@@ -296,15 +304,15 @@ def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-4, nr=1000):
     # Return (r, w, u, ud, v, vd, φ, φd, h, f4sqr)
     return [soln.t, *soln.y, f3sqr]
 
-def objective_T11(uv0, φ0, q0, rmax, rmin=10**-4, nr=1000):
+def objective_T11(uv0, φ0, q0, rmax, rmin=10**-4, nr=1000, display_progress=False):
     """Objective function to be minimized during shooting method."""
     
     soln = solve_T11(q0, *uv0, φ0, rmax, rmin)
 
     if len(soln) == 1:
         # Invlid (w0<0): return (const.)+|w0| to drive towards w0>0
-        # print('{:24.20f} {:24.20f}\tinvalid: {}'.format(*uv0, soln[0]))
-        return 10**16 + abs(soln[0])
+        print('{:24.20f} {:24.20f}\tinvalid: {}'.format(*uv0, soln[0]))
+        value = 10**8 + abs(soln[0])
     else:
         # Unpack solution
         r, w, u, ud, v, vd, φ, φd, h, f3sqr = soln
@@ -318,12 +326,16 @@ def objective_T11(uv0, φ0, q0, rmax, rmin=10**-4, nr=1000):
                         + (v[-1] + r[-1]*vd[-1]/Δ1)**2)
             # value -= 1/(1 + (u[-1]**2 + (v[-1] + r[-1]*vd[-1]/Δ1)**2))
             # value -= 1/(1 + ((u[-1] + 0.25*v[-1])**2 + (v[-1] + r[-1]*vd[-1]/Δ1)**2))
-            # print('{:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uv0, r[-1], value))
+            if display_progress:
+                print('{:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uv0, r[-1], value))
+
         else:
             value += u[-1]**2 + v[-1]**2
-            # print('{:24.20f} {:24.20f}\tsingular: {:4.2f}\t{:46.40f}'.format(*uv0, r[-1], value))
 
-        return value
+            if display_progress:
+                print('{:24.20f} {:24.20f}\tsingular: {:4.2f}\t{:46.40f}'.format(*uv0, r[-1], value))
+
+    return value
 
 def paramScan_T11(q0, u0_list, v0_list, rmax):
     """Returns objective function for a grid of u0,v0 values."""
@@ -338,7 +350,7 @@ def paramScan_T11(q0, u0_list, v0_list, rmax):
 
     return data
 
-def wormhole_T11(q0, rmax_list, uv0=[0,0], xatol=10**-16, nr=1000):
+def wormhole_T11(q0, rmax_list, uv0=[0,0], xatol=10**-16, nr=1000, display_progress=False):
     """Return optimal solution out to r=rmax for q0 and with r=0 boundary conditions found using shooting method."""
 
     uv0_best = uv0
@@ -347,13 +359,13 @@ def wormhole_T11(q0, rmax_list, uv0=[0,0], xatol=10**-16, nr=1000):
         # Shooting method: determine u0,v0 to match boundary conditions/scaling solutions at r>>q0
         # Set φ0 = 0 for optimizing u0,v0 since can always absorb constant into f3^2 at the end
         opt = minimize(objective_T11,
-                    args=(0, q0, rmax),
-                    x0=uv0_best,
-                    method='Nelder-Mead',
-                    options={'maxfev': 1000,
-                             'xatol': xatol,
-                            }
-                    )
+                       args=(0, q0, rmax, display_progress),
+                       x0=uv0_best,
+                       method='Nelder-Mead',
+                       options={'maxfev': 1000,
+                                'xatol': xatol,
+                               }
+                      )
         uv0_best = opt.x
 
         # Print results
@@ -365,6 +377,8 @@ def wormhole_T11(q0, rmax_list, uv0=[0,0], xatol=10**-16, nr=1000):
     soln = solve_T11(q0, *uv0_best, 0, rmax, nr=nr)
     r, w, u, ud, v, vd, φ, φd, h, f3sqr = soln
 
+    # Shift/rescale φ/flux so that φ(inf) -> 0
+    # This uses the fact that only the combination f^2 * exp(-φ) appears in the equations of motion
     φinf = φ[-1] + r[-1]*φd[-1]/4
     soln[6] -= φinf
     soln[9] *= np.exp(-φinf/2)
@@ -372,7 +386,7 @@ def wormhole_T11(q0, rmax_list, uv0=[0,0], xatol=10**-16, nr=1000):
     # Print results
     print('(q0,rmax,fev) = ({:6.4f},{:4.0f},{:4d})'.format(q0, rmax, opt.nfev), end=4*' ')
     print('(u0,v0,uf,vf) = ({:+.16f}, {:+.16f}, {:+.16f}, {:+.16f})\n' \
-        .format(*uv0_best, soln[2][-1], soln[4][-1]))
+          .format(*uv0_best, soln[2][-1], soln[4][-1]))
 
     return symmetrize_T11(soln)
 
