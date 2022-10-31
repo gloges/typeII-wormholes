@@ -1,15 +1,16 @@
-# Type II Wormholes
+# Type II AdS Wormholes
 
 Construct numerical wormhole solutions of type II SUGRA for...
+
  - massive type IIA on $S^3\times S^3$
  - type IIB on $T^{1,1}$
 
 using a shooting method. "Initial conditions" are chosen at the wormhole throat, leveraging the known perturbative solution at the $\mathbb{Z}_2$-symmetric point, and by integrating outward the solution should match to AdS boundary conditions for $r\to\infty$.
 
+
 ---
 ## Background
 Consistent truncations are identified for each model in the reduction to 4D and 5D. To find wormhole solutions these necessarily include massive scalars. The actions for the relevant modes are...
-
 
 - Massive type IIA on $S^3\times S^3$:
 
@@ -34,7 +35,7 @@ so that the coordinate $r$ covers the full wormhole. AdS boundary conditions are
 
 
 ---
-## Contents
-- [typeIIA_S3xs3.nb](https://github.com/gloges/typeII-wormholes/blob/main/typeIIA_S3xS3.nb) and [typeIIB_T11.nb](https://github.com/gloges/typeII-wormholes/blob/main/typeIIB_T11.nb): derivation of 4D/5D equations of motion directly from 10D and cross-check with 4D/5D actions above, as well as construction of perturbative solutions used to set BCs at $r=0$ in the shooting method
+## Contents overview
+- [typeIIA_S3xS3.nb](https://github.com/gloges/typeII-wormholes/blob/main/typeIIA_S3xS3.nb) and [typeIIB_T11.nb](https://github.com/gloges/typeII-wormholes/blob/main/typeIIB_T11.nb): derivation of 4D/5D equations of motion directly from 10D and cross-check with 4D/5D actions above, as well as construction of perturbative solutions used to set BCs at $r=0$ in the shooting method
 - [wormholes.py](https://github.com/gloges/typeII-wormholes/blob/main/wormholes.py): implementation of equations of motion and shooting method
 - [wormholes.ipynb](https://github.com/gloges/typeII-wormholes/blob/main/wormholes.ipynb): analysis and plots

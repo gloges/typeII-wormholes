@@ -4,6 +4,12 @@ from scipy.optimize import minimize
 from itertools import product
 from tqdm import tqdm
 
+# TODO Flesh out docstrings
+# TODO Check optional argument default values
+# TODO Less printing, more progress bars
+# TODO Triple check EoMs w/ Mathematica
+# TODO Checks for convergence? Or automatically increase rmax?
+# TODO Move some of the .ipynb plotting functionality into here?
 
 
 def Q(r, q0):
@@ -18,11 +24,11 @@ def Qdd(r, q0):
     """Returns second derivative of q=sqrt(q0^2 + r^2)."""
     return q0**2 / Q(r, q0)**3
 
-def wevent(r, y, q0, f3sqr):
+def w_event(r, y, q0, flux):
     """Stops integration if w -> 0."""
     w = y[0]
     return w - 0.1
-wevent.terminal = True
+w_event.terminal = True
 
 
 ###################################################################################################
@@ -102,7 +108,7 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-16, nr=1000):
     soln = solve_ivp(ODEs_S3S3, (rmin, rmax),
                      y0=y0,
                      args=args,
-                     events=(wevent),
+                     events=(w_event),
                      t_eval=np.linspace(rmin, rmax, nr),
                      rtol=10**-16,
                      method='RK45'
@@ -257,7 +263,7 @@ def ODEs_T11(r, y, q0, f3sqr):
     # Return derivatives of w, u, ud, v, vd, φ, φd and h
     return w_d, u_d, ud_d, v_d, vd_d, φ_d, φd_d, h_d
 
-def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-4, nr=1000):
+def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-8, nr=1000):
     """Solves ODEs for T11 out to r=rmax for given q0 and initial conditions u0,v0,φ0."""
 
     # Initial condition for w0 and the value of f3^2 are set by u0, v0 and φ0
@@ -295,7 +301,7 @@ def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-4, nr=1000):
     soln = solve_ivp(ODEs_T11, (rmin, rmax),
                      y0=y0,
                      args=args,
-                     events=(wevent),
+                     events=(w_event),
                      t_eval=np.linspace(rmin, rmax, nr),
                      rtol=10**-8,
                      method='RK45'
@@ -304,7 +310,7 @@ def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-4, nr=1000):
     # Return (r, w, u, ud, v, vd, φ, φd, h, f4sqr)
     return [soln.t, *soln.y, f3sqr]
 
-def objective_T11(uv0, φ0, q0, rmax, rmin=10**-4, nr=1000, display_progress=False):
+def objective_T11(uv0, φ0, q0, rmax, rmin=10**-8, nr=1000, display_progress=False):
     """Objective function to be minimized during shooting method."""
     
     soln = solve_T11(q0, *uv0, φ0, rmax, rmin)
@@ -377,8 +383,8 @@ def wormhole_T11(q0, rmax_list, uv0=[0,0], xatol=10**-16, nr=1000, display_progr
     soln = solve_T11(q0, *uv0_best, 0, rmax, nr=nr)
     r, w, u, ud, v, vd, φ, φd, h, f3sqr = soln
 
-    # Shift/rescale φ/flux so that φ(inf) -> 0
-    # This uses the fact that only the combination f^2 * exp(-φ) appears in the equations of motion
+    # Shift φ and rescale flux so that φ(inf) -> 0
+    # This leverages the fact that only the combination f^2 * exp(-φ) appears in the equations of motion
     φinf = φ[-1] + r[-1]*φd[-1]/4
     soln[6] -= φinf
     soln[9] *= np.exp(-φinf/2)
