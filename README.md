@@ -28,13 +28,13 @@ $$ \begin{align*}
 
 In both cases the metric ansatz is taken to be
 
-$$ \mathrm{d}s_d^2 = \frac{\mathrm{d}{r^2}}{q^2w} + q^2\mathrm{d}\Omega_{d-1}^2 \;, \qquad q(r) = \sqrt{q_0^2 + r^2} \;, $$
+$$ \mathrm{d}s_d^2 = \frac{\mathrm{d}{r^2}}{q^2w} + q^2\mathrm{d}\Omega_{d-1}^2 \qquad q(r) = \sqrt{q_0^2 + r^2} $$
 
 so that the coordinate $r$ covers the full wormhole. AdS boundary conditions are $w\to1$ and $u,v,\phi\to0$.
 
 
 ---
 ## Contents
-- [typeIIA_S3xs3.nb]() and [typeIIB_T11.nb](): derivation of 4D/5D equations of motion directly from 10D and cross-check with 4D/5D actions above, as well as construction of perturbative solutions used to set BCs at $r=0$ in the shooting method
-- [wormholes.py](): implementation of equations of motion and shooting method
-- [wormholes.ipynb](): analysis and plots
+- [typeIIA_S3xs3.nb](https://github.com/gloges/typeII-wormholes/blob/main/typeIIA_S3xS3.nb) and [typeIIB_T11.nb](https://github.com/gloges/typeII-wormholes/blob/main/typeIIB_T11.nb): derivation of 4D/5D equations of motion directly from 10D and cross-check with 4D/5D actions above, as well as construction of perturbative solutions used to set BCs at $r=0$ in the shooting method
+- [wormholes.py](https://github.com/gloges/typeII-wormholes/blob/main/wormholes.py): implementation of equations of motion and shooting method
+- [wormholes.ipynb](https://github.com/gloges/typeII-wormholes/blob/main/wormholes.ipynb): analysis and plots
