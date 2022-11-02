@@ -7,10 +7,6 @@ from tqdm import tqdm
 
 # TODO Flesh out docstrings
 # TODO Check optional argument default values
-# TODO Less printing, more progress bars
-# TODO Triple check EoMs w/ Mathematica
-# TODO Checks for convergence? Or automatically increase rmax?
-# TODO Move some of the .ipynb plotting functionality into here?
 
 
 def Q(r, q0):
