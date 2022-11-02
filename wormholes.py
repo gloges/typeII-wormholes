@@ -1,6 +1,7 @@
 import numpy as np
-from scipy.integrate import solve_ivp
+from scipy.integrate import solve_ivp, quad
 from scipy.optimize import minimize
+import matplotlib.pyplot as plt
 from itertools import product
 from tqdm import tqdm
 
@@ -74,7 +75,7 @@ def ODEs_S3S3(r, y, q0, f4sqr):
     # Return derivatives of w, u, ud, φ, φd and h
     return w_d, u_d, ud_d, φ_d, φd_d, h_d
 
-def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-16, nr=1000):
+def solve_S3S3(q0, rmax, u0, φ0, rmin=10**-8, nr=1000):
     """Solves ODEs for S3xS3 out to r=rmax for given q0 and initial conditions u0,φ0."""
 
     # Initial condition for w0 and the value of f4^2 are set by u0 and φ0
@@ -110,17 +111,17 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-16, nr=1000):
                      args=args,
                      events=(w_event),
                      t_eval=np.linspace(rmin, rmax, nr),
-                     rtol=10**-16,
+                     rtol=10**-8,
                      method='RK45'
                     )
 
     # Return (r, w, u, ud, φ, φd, h, f4sqr)
     return [soln.t, *soln.y, f4sqr]
 
-def objective_S3S3(uφ0, q0, rmax, rmin=10**-16, nr=1000, display_progress=False):
+def objective_S3S3(uφ0, q0, rmax, rmin=10**-8, nr=1000, display_progress=False):
     """Objective function to be minimized during shooting method."""
 
-    soln = solve_S3S3(q0, *uφ0, rmax, rmin)
+    soln = solve_S3S3(q0, rmax, *uφ0, rmin)
 
     if len(soln) == 1:
         # Invlid (w0<0): return (const.)+|w0| to drive towards w0>0
@@ -151,8 +152,11 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-16, nr=1000, display_progress=False
 
     return value
 
-def paramScan_S3S3(q0, u0_list, φ0_list, rmax):
-    """Returns objective function for a grid of u0,φ0 values."""
+def paramScan_S3S3(q0, rmax, u0_bounds, φ0_bounds, u0_steps, φ0_steps):
+    """Displays the objective function for a grid of u0,φ0 values."""
+
+    u0_list = np.linspace(u0_bounds[0], u0_bounds[1], u0_steps)
+    φ0_list = np.linspace(φ0_bounds[0], φ0_bounds[1], φ0_steps)
 
     data = []
 
@@ -162,38 +166,63 @@ def paramScan_S3S3(q0, u0_list, φ0_list, rmax):
     
     data = np.asarray(data).T
 
-    return data
+    plotData = data[:, data[2] < 1000]
 
-def wormhole_S3S3(q0, rmax_list, uφ0=[0,0], xatol=10**-16, nr=1000, display_progress=False):
+    fig, ax = plt.subplots(1, 1, figsize=(13, 5))
+    im = plt.tricontourf(plotData[0], plotData[1], plotData[2],
+                         levels=20,
+                         cmap='cet_CET_L12_r',
+                         origin='lower',
+                         extent=(u0_list[0], u0_list[-1], φ0_list[0], φ0_list[-1])
+                        )
+
+    plt.xlim(u0_list[0], u0_list[-1])
+    plt.ylim(φ0_list[0], φ0_list[-1])
+
+    plt.xlabel('$u_0$')
+    plt.ylabel('$\phi_0$')
+
+    plt.colorbar(im)
+
+    plt.show()
+
+def wormhole_S3S3(q0, rmax, rmax_steps=3, uφ0=[0,0], xatol=10**-8, nr=1000, display_progress=False):
     """Return optimal solution out to r=rmax for q0 and with r=0 boundary conditions found using shooting method."""
 
+    print('\nPerforming shooting method for q0 = {} out to r = {} ...'.format(q0, rmax))
+
+    # Optimize several times, increasing rmax and updating (u0,φ0) at each step
+    rmax_list = np.geomspace(q0, rmax, rmax_steps)
     uφ0_best = uφ0
 
-    for rmax in rmax_list:
+    for ii, rmax_ii in enumerate(rmax_list):
+        
+        # Use lower precision except for final optimization
+        xatol_ii = 10**-4
+        if ii+1 == rmax_steps:
+            xatol_ii = xatol
+
+        print('  rmax = {:.4f} with xatol = {}'.format(rmax_ii, xatol_ii))
+
         # Shooting method: determine u0,φ0 to match boundary conditions/scaling solutions at r>>q0
-        opt = minimize(objective_S3S3,
-                       args=(q0, rmax, display_progress),
+        opt = minimize(lambda uφ0: objective_S3S3(uφ0, q0, rmax_ii, display_progress=display_progress),
                        x0=uφ0_best,
                        method='Nelder-Mead',
                        options={'maxfev': 1000,
-                                'xatol': xatol,
+                                'xatol': xatol_ii,
                                }
                       )
         uφ0_best = opt.x
 
         # Print results
-        print('(q0,rmax,fev) = ({:6.4f},{:4.0f},{:4d})'.format(q0, rmax, opt.nfev), end=4*' ')
-        print('(u0,φ0) = ({:+.16f}, {:+.16f})'.format(*uφ0_best), end=4*' ')
-        print('val = {:.16}'.format(opt.fun))
+        print('{:>10} : {}'.format('f_eval', opt.nfev))
+        print('{:>10} : {:+.10g}'.format('u0', uφ0_best[0]))
+        print('{:>10} : {:+.10g}'.format('φ0', uφ0_best[1]))
+        print('{:>10} : {:.10g}'.format('val', opt.fun))
 
     # Get numerical solution for optimial initial conditions
-    soln = solve_S3S3(q0, *uφ0_best, rmax, nr=nr)
+    soln = solve_S3S3(q0, rmax, *uφ0_best, nr=nr)
     r, w, u, ud, φ, φd, h, f4sqr = soln
-
-    # Print results
-    print('(q0,rmax,fev) = ({:6.4f},{:6.4f},{:4d})'.format(q0, rmax, opt.nfev), end=4*' ')
-    print('(u0,φ0,uf,φf) = ({:+.16f}, {:+.16f}, {:+.16f}, {:+.16f})\n' \
-        .format(*uφ0_best, soln[2][-1], soln[4][-1]))
 
     return symmetrize_S3S3(soln)
 
@@ -215,6 +244,22 @@ def symmetrize_S3S3(soln):
 
     return r, w, u, ud, φ, φd, h, f4sqr
 
+def massless_approx_S3S3(q0):
+    
+    # Taking h(0) = 0, first compute h(inf)
+    h_inf = quad(lambda x: q0**-2 * x**2 * (q0**2 + x**2 - (1+q0**2)*x**6)**(-1/2),
+                 0, 1,
+                 args=(q0)
+                )
+
+    # φ = -2u has profile exp(φ) = cos(1/2 * sqrt(-c)*h) / cos(1/2 * sqrt(-c)*hinf),
+    #   so φ(0) = -log[cos(1/2 * sqrt(-c)*hinf)]
+    c_abs = 12*q0**4 * (1+q0**2)
+    f4 = np.sqrt(c_abs) / np.cos(0.5 * np.sqrt(c_abs) * h_inf)
+    φ0 = -np.log(np.cos(0.5 * np.sqrt(c_abs) * h_inf))
+    u0 = -0.5*φ0
+
+    return u0, φ0, f4
 
 ###################################################################################################
 #
@@ -263,7 +308,7 @@ def ODEs_T11(r, y, q0, f3sqr):
     # Return derivatives of w, u, ud, v, vd, φ, φd and h
     return w_d, u_d, ud_d, v_d, vd_d, φ_d, φd_d, h_d
 
-def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-8, nr=1000):
+def solve_T11(q0, rmax, u0, v0, φ0, rmin=10**-8, nr=1000):
     """Solves ODEs for T11 out to r=rmax for given q0 and initial conditions u0,v0,φ0."""
 
     # Initial condition for w0 and the value of f3^2 are set by u0, v0 and φ0
@@ -313,11 +358,13 @@ def solve_T11(q0, u0, v0, φ0, rmax, rmin=10**-8, nr=1000):
 def objective_T11(uv0, φ0, q0, rmax, rmin=10**-8, nr=1000, display_progress=False):
     """Objective function to be minimized during shooting method."""
     
-    soln = solve_T11(q0, *uv0, φ0, rmax, rmin)
+    soln = solve_T11(q0, rmax, *uv0, φ0, rmin)
 
     if len(soln) == 1:
         # Invlid (w0<0): return (const.)+|w0| to drive towards w0>0
-        print('{:24.20f} {:24.20f}\tinvalid: {}'.format(*uv0, soln[0]))
+        if display_progress:
+            print('{:24.20f} {:24.20f}\tinvalid'.format(*uv0))
+
         value = 10**8 + abs(soln[0])
     else:
         # Unpack solution
@@ -343,8 +390,11 @@ def objective_T11(uv0, φ0, q0, rmax, rmin=10**-8, nr=1000, display_progress=Fal
 
     return value
 
-def paramScan_T11(q0, u0_list, v0_list, rmax):
-    """Returns objective function for a grid of u0,v0 values."""
+def paramScan_T11(q0, rmax, u0_bounds, v0_bounds, u0_steps, v0_steps):
+    """Displays the objective function for a grid of u0,v0 values."""
+
+    u0_list = np.linspace(u0_bounds[0], u0_bounds[1], u0_steps)
+    v0_list = np.linspace(v0_bounds[0], v0_bounds[1], v0_steps)
 
     data = []
 
@@ -354,33 +404,63 @@ def paramScan_T11(q0, u0_list, v0_list, rmax):
     
     data = np.asarray(data).T
 
-    return data
+    plotData = data[:, data[2] < 1000]
 
-def wormhole_T11(q0, rmax_list, uv0=[0,0], xatol=10**-16, nr=1000, display_progress=False):
+    fig, ax = plt.subplots(1, 1, figsize=(13, 5))
+    im = plt.tricontourf(plotData[0], plotData[1], plotData[2],
+                         levels=20,
+                         cmap='cet_CET_L12_r',
+                         origin='lower',
+                         extent=(u0_list[0], u0_list[-1], v0_list[0], v0_list[-1])
+                        )
+
+    plt.xlim(u0_list[0], u0_list[-1])
+    plt.ylim(v0_list[0], v0_list[-1])
+
+    plt.xlabel('$u_0$')
+    plt.ylabel('$v_0$')
+
+    plt.colorbar(im)
+
+    plt.show()
+
+def wormhole_T11(q0, rmax, rmax_steps=3, uv0=[0,0], xatol=10**-8, nr=1000, display_progress=False):
     """Return optimal solution out to r=rmax for q0 and with r=0 boundary conditions found using shooting method."""
 
+    print('\nPerforming shooting method for q0 = {} out to r = {} ...'.format(q0, rmax))
+
+    # Optimize several times, increasing rmax and updating (u0,v0) at each step
+    rmax_list = np.geomspace(q0, rmax, rmax_steps)
     uv0_best = uv0
 
-    for rmax in rmax_list:
+    for ii, rmax_ii in enumerate(rmax_list):
+        
+        # Use lower precision except for final optimization
+        xatol_ii = 10**-4
+        if ii+1 == rmax_steps:
+            xatol_ii = xatol
+
+        print('  rmax = {:.4f} with xatol = {}'.format(rmax_ii, xatol_ii))
+
         # Shooting method: determine u0,v0 to match boundary conditions/scaling solutions at r>>q0
         # Set φ0 = 0 for optimizing u0,v0 since can always absorb constant into f3^2 at the end
-        opt = minimize(objective_T11,
-                       args=(0, q0, rmax, display_progress),
+        opt = minimize(lambda uv0: objective_T11(uv0, 0, q0, rmax_ii, display_progress=display_progress),
                        x0=uv0_best,
                        method='Nelder-Mead',
                        options={'maxfev': 1000,
-                                'xatol': xatol,
+                                'xatol': xatol_ii,
                                }
                       )
         uv0_best = opt.x
 
         # Print results
-        print('(q0,rmax,fev) = ({:6.4f},{:4.0f},{:4d})'.format(q0, rmax, opt.nfev), end=4*' ')
-        print('(u0,v0) = ({:+.16f}, {:+.16f})'.format(*uv0_best), end=4*' ')
-        print('val = {:.16}'.format(opt.fun))
+        print('{:>10} : {}'.format('f_eval', opt.nfev))
+        print('{:>10} : {:+.10g}'.format('u0', uv0_best[0]))
+        print('{:>10} : {:+.10g}'.format('v0', uv0_best[1]))
+        print('{:>10} : {:.10g}'.format('val', opt.fun))
 
     # Get numerical solution for optimial initial conditions
-    soln = solve_T11(q0, *uv0_best, 0, rmax, nr=nr)
+    soln = solve_T11(q0, rmax, *uv0_best, 0, nr=nr)
     r, w, u, ud, v, vd, φ, φd, h, f3sqr = soln
 
     # Shift φ and rescale flux so that φ(inf) -> 0
@@ -388,11 +468,6 @@ def wormhole_T11(q0, rmax_list, uv0=[0,0], xatol=10**-16, nr=1000, display_progr
     φinf = φ[-1] + r[-1]*φd[-1]/4
     soln[6] -= φinf
     soln[9] *= np.exp(-φinf/2)
-
-    # Print results
-    print('(q0,rmax,fev) = ({:6.4f},{:4.0f},{:4d})'.format(q0, rmax, opt.nfev), end=4*' ')
-    print('(u0,v0,uf,vf) = ({:+.16f}, {:+.16f}, {:+.16f}, {:+.16f})\n' \
-          .format(*uv0_best, soln[2][-1], soln[4][-1]))
 
     return symmetrize_T11(soln)
 
@@ -415,3 +490,35 @@ def symmetrize_T11(soln):
     φd = np.append(-φd[-1:0:-1], [φd])
 
     return r, w, u, ud, v, vd, φ, φd, h, f3sqr
+
+def massless_approx_T11(q0):
+    
+    # Taking h(0) = 0, first compute h(inf)
+    h_inf, err = quad(lambda x: q0**-3 * x**3 * (q0**2 + x**2 - (1+q0**2)*x**8)**(-1/2),
+                      0, 1
+                     )
+
+    # φ = -4u = 4v has profile exp(φ) = cos(sqrt(-c/2)*h) / cos(sqrt(-c/2)*hinf),
+    #   so φ(0) = -log[cos(sqrt(-c/2)*hinf)]
+    c_abs = 24*q0**6 * (1+q0**2)
+    f3 = np.sqrt(c_abs) / np.cos(np.sqrt(c_abs/2) * h_inf)
+    φ0 = -np.log(np.cos(np.sqrt(c_abs/2) * h_inf))
+    u0 = -φ0/4
+    v0 = φ0/4
+
+    return u0, v0, φ0, f3
+
+def frozen_approx_T11(q0):
+
+    # Taking h(0) = 0, first compute h(inf)
+    h_inf, err = quad(lambda x: q0**-3 * x**3 * (q0**2 + x**2 - (1+q0**2)*x**8)**(-1/2),
+                      0, 1
+                     )
+
+    # u=v=0 and exp(φ/2) = cos(1/2 * sqrt(-c)*h) / cos(1/2 * sqrt(-c)*hinf),
+    #   so φ(0) = -2*log[cos(1/2 * sqrt(-c)*hinf)]
+    c_abs = 24*q0**6 * (1 + q0**2)
+    f3 = np.sqrt(c_abs) / np.cos(0.5*np.sqrt(c_abs) * h_inf)
+    φ0 = -2*np.log(np.cos(0.5*np.sqrt(c_abs) * h_inf))
+
+    return 0, 0, φ0, f3
