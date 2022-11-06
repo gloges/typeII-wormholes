@@ -7,7 +7,6 @@ from tqdm import tqdm
 
 # TODO Flesh out docstrings
 # TODO Check optional argument default values
-# TODO Remove w
 
 
 def Q(r, q0):
@@ -508,7 +507,7 @@ def massless_approx_T11(q0):
     u0 = -φ0/4
     v0 = φ0/4
 
-    return u0, v0, φ0, f3
+    return u0, v0, φ0, f3, h_inf
 
 def frozen_approx_T11(q0):
 
@@ -523,4 +522,63 @@ def frozen_approx_T11(q0):
     f3 = np.sqrt(c_abs) / np.cos(0.5*np.sqrt(c_abs) * h_inf)
     φ0 = -2*np.log(np.cos(0.5*np.sqrt(c_abs) * h_inf))
 
-    return 0, 0, φ0, f3
+    return 0, 0, φ0, f3, h_inf
+
+def ODE_φ(r, y, q0, f3sqr):
+
+    φ, φd = y
+
+    q = Q(r, q0)
+    qd = Qd(r, q0)
+    qdd = Qdd(r, q0)
+
+    φ_d = φd
+
+    f = qd / np.sqrt(1 + q**2 - q0**6 * (1+q0**2)/q**6)
+
+    # Equation of motion
+    prefactor = qdd/qd - qd/q - f**2/(q*qd) * (3 + 4*q**2)
+    
+    φd_d = prefactor*φd - f3sqr*np.exp(-φ) * f**2/(2*q**8)
+
+    return φ_d, φd_d
+
+
+def wormhole_frozen_T11(q0, rmax, nr=1000):
+
+    rmin = 10**-8
+
+    r = np.geomspace(rmin, rmax, nr)
+
+    q = Q(r, q0)
+    qd = Qd(r, q0)
+
+    c_abs = 24*q0**6 * (1 + q0**2)
+
+    f = qd / np.sqrt(1 + q**2 - q0**6 * (1+q0**2)/q**6)
+    f[0] = 1 / np.sqrt(3 + 4*q0**2)
+
+    u0, v0, φ0, f3, h_inf = frozen_approx_T11(q0)
+
+    f3 = np.sqrt(c_abs) / np.cos(0.5*np.sqrt(c_abs) * h_inf)
+
+
+    soln = solve_ivp(ODE_φ, (rmin, rmax),
+                     y0=[φ0, 0],
+                     args=[q0, f3**2],
+                     t_eval=r,
+                     rtol=10**-12,
+                     method='RK45'
+                    )
+    φ, φd = soln.y
+
+    φ -= φ[-1] + r[-1]*φd[-1]/4
+
+    u = 0*r
+    ud = 0*r
+    v = 0*r
+    vd = 0*r
+
+    soln = [r, f, u, ud, v, vd, φ, φd, 0*r, f3**2]
+
+    return symmetrize_T11(soln)
