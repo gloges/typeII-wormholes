@@ -278,7 +278,7 @@ def dVdv_T11(u, v):
     """v-derivative of scalar potential V(u,v) for T11."""
     return (16/3)*np.exp(-8/3*(4*u+v)) * (np.exp(4*u+4*v) + 3*np.exp(6*u+2*v) - 4)
 
-def ODEs_T11(r, y, q0, flux2):
+def ODEs_T11(r, y, q0, flux2sqr):
     """ODEs for f, u, v, φ, χ and h."""
 
     # Unpack
@@ -299,39 +299,40 @@ def ODEs_T11(r, y, q0, flux2):
     
     f_d  = (prefactor + 4*qd/q) * f
     ud_d = prefactor*ud + (f**2 / 16) * ( dVdu_T11(u, v) -   dVdv_T11(u, v)) \
-           - (1/8)*flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) * f**2/q**8
+           - (1/8)*flux2sqr * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) * f**2/q**8
     vd_d = prefactor*vd + (f**2 / 16) * (-dVdu_T11(u, v) + 7*dVdv_T11(u, v)) \
-           + (1/8)*flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) * f**2/q**8
-    φd_d = prefactor*φd - (1/2)*flux2**2 * np.exp(4*u+φ) * (χ**2 + np.exp(-2*φ)) * f**2/q**8
-    χd_d = prefactor*χd - 2*φd*χd + flux2**2 * np.exp(4*u-φ) * χ * f**2/q**8
+           + (1/8)*flux2sqr * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) * f**2/q**8
+    φd_d = prefactor*φd - np.exp(2*φ)*χd**2 - (1/2)*flux2sqr * np.exp(4*u+φ) * (χ**2 + np.exp(-2*φ)) * f**2/q**8
+    χd_d = prefactor*χd - 2*φd*χd + flux2sqr * np.exp(4*u-φ) * χ * f**2/q**8
 
     h_d = f/q**4
 
     # Return derivatives
     return f_d, u_d, ud_d, v_d, vd_d, φ_d, φd_d, χ_d, χd_d, h_d
 
-def solve_T11(q0, flux2, u0, v0, φ0, rmax, rmin=10**-8, nr=1000):
+def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-8, nr=1000):
     """Solves ODEs for T11 out to r=rmax for given q0 and initial conditions u0,v0,φ0."""
 
     # Initial condition for f0 and the value of f3^2 are set by u0, v0 and φ0
     #   f0m2 = f0**(-2)
     f0m2 = 3 - 1/3 * q0**2 * V_T11(u0, v0)
-    χ1sqr = np.exp(-2*φ0) * (6 * (1+f0m2**-1)/q0**2 - flux2**2 * np.exp(4*u0-φ0) * f0m2**-1)
+    # χ1sqr = np.exp(-2*φ0) * (6 * (1+f0m2**-1)/q0**2 - flux2**2 * np.exp(4*u0-φ0) * f0m2**-1)
+    flux2sqr = 6*np.exp(-4*u0+φ0) * q0**6 * (1 + f0m2 * (1 - 1/6 * q0**2 * np.exp(2*φ0) * χ1**2))
+
     
-    if f0m2 < 0 or χ1sqr < 0:
+    if f0m2 < 0 or flux2sqr < 0:
         # Regular solutions must have f0**2>0 and χ1**2>0
-        return np.array([f0m2, χ1sqr])
+        return np.array([f0m2, flux2sqr])
 
     f0 = f0m2**(-1/2)
-    χ1 = np.sqrt(χ1sqr)
 
     # Use series solutions (e.g. u = u0 + 1/2*udd0 * r^2 + ...)
     # to get initial conditions at 0 < rmin << q0
     udd0 = (f0**2 / 16) * ( dVdu_T11(u0, v0) -   dVdv_T11(u0, v0)) \
-           + (1/8)*flux2**2 * np.exp(4*u0-φ0) * f0**2/q0**8
+           + (1/8)*flux2sqr * np.exp(4*u0-φ0) * f0**2/q0**8
     vdd0 = (f0**2 / 16) * (-dVdu_T11(u0, v0) + 7*dVdv_T11(u0, v0)) \
-           - (1/8)*flux2**2 * np.exp(4*u0-φ0) * f0**2/q0**8
-    φdd0 = -(1/2)*flux2**2 * np.exp(4*u0-φ0) * f0**2/q0**8 - np.exp(2*φ0)*χ1**2
+           - (1/8)*flux2sqr * np.exp(4*u0-φ0) * f0**2/q0**8
+    φdd0 = -(1/2)*flux2sqr * np.exp(4*u0-φ0) * f0**2/q0**8 - np.exp(2*φ0)*χ1**2
     fdd0 = (f0**3 * q0**2 / 12) * (6*(3+f0**(-2))/q0**4 + udd0*dVdu_T11(u0, v0) + vdd0*dVdv_T11(u0, v0))
     
     f_start = f0 + (1/2)*fdd0*rmin**2
@@ -352,53 +353,53 @@ def solve_T11(q0, flux2, u0, v0, φ0, rmax, rmin=10**-8, nr=1000):
 
     # Initial conditions and constants
     y0 = (f_start, u_start, ud_start, v_start, vd_start, φ_start, φd_start, χ_start, χd_start, h_start)
-    args = (q0, flux2)
+    args = (q0, flux2sqr)
 
     soln = solve_ivp(ODEs_T11, (rmin, rmax),
                      y0=y0,
                      args=args,
                      events=(f_event),
-                     t_eval=np.geomspace(rmin, rmax, nr),
+                     t_eval=np.linspace(rmin, rmax, nr),
                      rtol=10**-8,
                      method='RK45'
                     )
 
     # Return (r, f, u, ud, v, vd, φ, φd, χ, χd, h)
-    return [soln.t, *soln.y]
+    return [soln.t, *soln.y, np.sqrt(flux2sqr)]
 
-def objective_T11(uvφ0, q0, flux2, rmax, rmin=10**-8, nr=1000, display_progress=False):
+def objective_T11(uv0, χ1, q0, rmax, rmin=10**-8, nr=1000, display_progress=False):
     """Objective function to be minimized during shooting method."""
-    
-    soln = solve_T11(q0, flux2, *uvφ0, rmax, rmin)
+
+    soln = solve_T11(q0, *uv0, 0, χ1, rmax, rmin)
 
     if len(soln) == 2:
         # Invlid (f0**2<0): return (const.)+|f0| to drive towards f0**2>0
         if display_progress:
-            print('{:24.20f} {:24.20f} {:24.20f}\tinvalid'.format(*uvφ0))
+            print('{:24.20f} {:24.20f} {:24.20f}\tinvalid'.format(*uv0))
 
         value = 10**8 + sum(abs(soln[soln < 0]))
 
     else:
         # Unpack solution
-        r, f, u, ud, v, vd, φ, φd, χ, χd, h = soln
+        r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
 
         value = 1 + 10**3 * (rmax/r[-1] - 1)
 
         if r[-1] == rmax:
             value -= 1/(1 + ((u[-1] + 0.25*v[-1]) + r[-1]*(ud[-1] + 0.25*vd[-1])/8)**2 \
-                        + (v[-1] + r[-1]*vd[-1]/6)**2 + (φ[-1] + r[-1]*φd[-1]/4)**2)
+                        + (v[-1] + r[-1]*vd[-1]/6)**2)
             if display_progress:
-                print('{:24.20f} {:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uvφ0, r[-1], value))
+                print('{:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uv0, r[-1], value))
 
         else:
-            value += u[-1]**2 + v[-1]**2 + φ[-1]**2
+            value += u[-1]**2 + v[-1]**2
 
             if display_progress:
-                print('{:24.20f} {:24.20f} {:24.20f}\tsingular: {:4.2f}\t{:46.40f}'.format(*uvφ0, r[-1], value))
+                print('{:24.20f} {:24.20f}\tsingular: {:4.2f}\t{:46.40f}'.format(*uv0, r[-1], value))
 
     return value
 
-def paramScan_T11(q0, flux2, u0_bounds, v0_bounds, φ0, u0_steps, v0_steps, rmax):
+def paramScan_T11(q0, χ1, u0_bounds, v0_bounds, u0_steps, v0_steps, rmax):
     """Displays the objective function for a grid of u0,v0 values."""
 
     u0_list = np.linspace(u0_bounds[0], u0_bounds[1], u0_steps)
@@ -407,7 +408,7 @@ def paramScan_T11(q0, flux2, u0_bounds, v0_bounds, φ0, u0_steps, v0_steps, rmax
     data = []
 
     for u0, v0 in tqdm(product(u0_list, v0_list), total=len(u0_list)*len(v0_list)):
-        quality = objective_T11([u0, v0, φ0], q0, flux2, rmax)
+        quality = objective_T11([u0, v0], χ1, q0, rmax)
         data.append([u0, v0, quality])
     
     data = np.asarray(data).T
@@ -432,14 +433,14 @@ def paramScan_T11(q0, flux2, u0_bounds, v0_bounds, φ0, u0_steps, v0_steps, rmax
 
     plt.show()
 
-def wormhole_T11(q0, flux2, rmax, rmax_steps=3, uvφ0=[0,0,0], xatol=10**-8, nr=1000, display_progress=False):
+def wormhole_T11(q0, χ1, rmax, rmax_steps=3, uv0=[0,0], xatol=10**-8, nr=1000, display_progress=False):
     """Return optimal solution out to r=rmax for q0 and with r=0 boundary conditions found using shooting method."""
 
-    print('\nPerforming shooting method for q0 = {} out to r = {} ...'.format(q0, rmax))
+    print('\nPerforming shooting method for q0 = {} and χ0p = {} out to r = {} ...'.format(q0, χ1, rmax))
 
     # Optimize several times, increasing rmax and updating (u0,v0) at each step
     rmax_list = np.geomspace(q0, rmax, rmax_steps)
-    uvφ0_best = uvφ0
+    uv0_best = uv0
 
     for ii, rmax_ii in enumerate(rmax_list):
         
@@ -451,38 +452,38 @@ def wormhole_T11(q0, flux2, rmax, rmax_steps=3, uvφ0=[0,0,0], xatol=10**-8, nr=
         print('    rmax = {:.4f} with xatol = {}'.format(rmax_ii, xatol_ii))
 
         # Shooting method: determine u0,v0 to match boundary conditions/scaling solutions at r>>q0
-        opt = minimize(lambda uvφ0: objective_T11(uvφ0, q0, flux2, rmax_ii, display_progress=display_progress),
-                       x0=uvφ0_best,
+        opt = minimize(lambda uv0: objective_T11(uv0, χ1, q0, rmax_ii, display_progress=display_progress),
+                       x0=uv0_best,
                        method='Nelder-Mead',
                        options={'maxfev': 1000,
                                 'xatol': xatol_ii,
                                }
                       )
-        uvφ0_best = opt.x
+        uv0_best = opt.x
 
         # Print results
         print('{:>14} : {}'.format('f_eval', opt.nfev))
-        print('{:>14} : {:+.10g}'.format('u0', uvφ0_best[0]))
-        print('{:>14} : {:+.10g}'.format('v0', uvφ0_best[1]))
-        print('{:>14} : {:+.10g}'.format('φ0', uvφ0_best[2]))
+        print('{:>14} : {:+.10g}'.format('u0', uv0_best[0]))
+        print('{:>14} : {:+.10g}'.format('v0', uv0_best[1]))
         print('{:>14} : {:.10g}'.format('val', opt.fun))
 
     # Get numerical solution for optimial initial conditions
-    soln = solve_T11(q0, flux2, *uvφ0_best, rmax, nr=nr)
-    r, f, u, ud, v, vd, φ, φd, χ, χd, h = soln
+    soln = solve_T11(q0, *uv0_best, 0, χ1, rmax, nr=nr)
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
 
-    # # Shift φ and rescale flux so that φ(inf) -> 0
-    # # This leverages the fact that only the combination f^2 * exp(-φ) appears in the equations of motion
-    # φinf = φ[-1] + r[-1]*φd[-1]/4
-    # soln[6] -= φinf
-    # soln[9] *= np.exp(-φinf/2)
+    # Use SL(2,R) to pick φ(inf) -> 0
+    φinf = φ[-1] + r[-1]*φd[-1]/4
+    soln[6] -= φinf
+    soln[8] *= np.exp(φinf)
+    soln[9] *= np.exp(φinf)
+    soln[11] *= np.exp(-φinf/2)
 
     return symmetrize_T11(soln)
 
 def symmetrize_T11(soln):
     """Extend solutions from 0 < r < rmax to -rmax < r < rmax."""
 
-    r, f, u, ud, v, vd, φ, φd, χ, χd, h = soln
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
     r[0] = 0
 
     # Make (anti-)symmetric about r=0
@@ -499,7 +500,7 @@ def symmetrize_T11(soln):
     φd = np.append(-φd[-1:0:-1], [φd])
     χd = np.append( χd[-1:0:-1], [χd])
 
-    return r, f, u, ud, v, vd, φ, φd, χ, χd, h
+    return r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2
 
 def massless_approx_T11(q0):
     
