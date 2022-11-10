@@ -433,10 +433,13 @@ def paramScan_T11(q0, χ1, u0_bounds, v0_bounds, u0_steps, v0_steps, rmax):
 
     plt.show()
 
-def wormhole_T11(q0, χ1, rmax, rmax_steps=3, uv0=[0,0], xatol=10**-8, nr=1000, display_progress=False):
+def wormhole_T11(q0, χ1, rmax, rmax_steps=3, uv0=[0,0], xatol=10**-8, nr=1000, display_progress=False, quiet=False):
     """Return optimal solution out to r=rmax for q0 and with r=0 boundary conditions found using shooting method."""
 
-    print('\nPerforming shooting method for q0 = {} and χ0p = {} out to r = {} ...'.format(q0, χ1, rmax))
+    end=''
+    if not quiet:
+        end='\n'
+    print('Performing shooting method for q0 = {:.2f} and χ0p = {:.2f} out to r = {:.2f} ...'.format(q0, χ1, rmax), end=end)
 
     # Optimize several times, increasing rmax and updating (u0,v0) at each step
     rmax_list = np.geomspace(q0, rmax, rmax_steps)
@@ -449,7 +452,8 @@ def wormhole_T11(q0, χ1, rmax, rmax_steps=3, uv0=[0,0], xatol=10**-8, nr=1000, 
         if ii+1 == rmax_steps:
             xatol_ii = xatol
 
-        print('    rmax = {:.4f} with xatol = {}'.format(rmax_ii, xatol_ii))
+        if not quiet:
+            print('    rmax = {:.4f} with xatol = {}'.format(rmax_ii, xatol_ii))
 
         # Shooting method: determine u0,v0 to match boundary conditions/scaling solutions at r>>q0
         opt = minimize(lambda uv0: objective_T11(uv0, χ1, q0, rmax_ii, display_progress=display_progress),
@@ -461,11 +465,15 @@ def wormhole_T11(q0, χ1, rmax, rmax_steps=3, uv0=[0,0], xatol=10**-8, nr=1000, 
                       )
         uv0_best = opt.x
 
-        # Print results
-        print('{:>14} : {}'.format('f_eval', opt.nfev))
-        print('{:>14} : {:+.10g}'.format('u0', uv0_best[0]))
-        print('{:>14} : {:+.10g}'.format('v0', uv0_best[1]))
-        print('{:>14} : {:.10g}'.format('val', opt.fun))
+        if not quiet:
+            # Print results
+            print('{:>14} : {}'.format('f_eval', opt.nfev))
+            print('{:>14} : {:+.10g}'.format('u0', uv0_best[0]))
+            print('{:>14} : {:+.10g}'.format('v0', uv0_best[1]))
+            print('{:>14} : {:.10g}\n'.format('val', opt.fun))
+
+    if quiet:
+        print(' DONE: val_final = {:.10g}'.format(opt.fun))
 
     # Get numerical solution for optimial initial conditions
     soln = solve_T11(q0, *uv0_best, 0, χ1, rmax, nr=nr)
@@ -512,12 +520,12 @@ def massless_approx_T11(q0):
     # φ = -4u = 4v has profile exp(φ) = cos(sqrt(-c/2)*h) / cos(sqrt(-c/2)*hinf),
     #   so φ(0) = -log[cos(sqrt(-c/2)*hinf)]
     c_abs = 24*q0**6 * (1+q0**2)
-    f3 = np.sqrt(c_abs) / np.cos(np.sqrt(c_abs/2) * h_inf)
+    flux2 = np.sqrt(c_abs) / np.cos(np.sqrt(c_abs/2) * h_inf)
     φ0 = -np.log(np.cos(np.sqrt(c_abs/2) * h_inf))
     u0 = -φ0/4
     v0 = φ0/4
 
-    return u0, v0, φ0, f3, h_inf
+    return u0, v0, φ0, flux2, h_inf
 
 def frozen_approx_T11(q0):
 
@@ -529,10 +537,10 @@ def frozen_approx_T11(q0):
     # u=v=0 and exp(φ/2) = cos(1/2 * sqrt(-c)*h) / cos(1/2 * sqrt(-c)*hinf),
     #   so φ(0) = -2*log[cos(1/2 * sqrt(-c)*hinf)]
     c_abs = 24*q0**6 * (1 + q0**2)
-    f3 = np.sqrt(c_abs) / np.cos(0.5*np.sqrt(c_abs) * h_inf)
+    flux2 = np.sqrt(c_abs) / np.cos(0.5*np.sqrt(c_abs) * h_inf)
     φ0 = -2*np.log(np.cos(0.5*np.sqrt(c_abs) * h_inf))
 
-    return 0, 0, φ0, f3, h_inf
+    return 0, 0, φ0, flux2, h_inf
 
 def ODE_φ(r, y, q0, f3sqr):
 
