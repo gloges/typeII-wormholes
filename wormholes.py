@@ -186,10 +186,13 @@ def paramScan_S3S3(q0, rmax, u0_bounds, φ0_bounds, u0_steps, φ0_steps):
 
     plt.show()
 
-def wormhole_S3S3(q0, rmax, rmax_steps=3, uφ0=[0,0], xatol=10**-8, nr=1000, display_progress=False):
+def wormhole_S3S3(q0, rmax, rmax_steps=3, uφ0=[0,0], xatol=10**-8, nr=1000, display_progress=False, quiet=False):
     """Return optimal solution out to r=rmax for q0 and with r=0 boundary conditions found using shooting method."""
 
-    print('\nPerforming shooting method for q0 = {} out to r = {} ...'.format(q0, rmax))
+    end=''
+    if not quiet:
+        end='\n'
+    print('Performing shooting method for q0 = {:.2f} out to r = {:.2f} ...'.format(q0, rmax), end=end)
 
     # Optimize several times, increasing rmax and updating (u0,φ0) at each step
     rmax_list = np.geomspace(q0, rmax, rmax_steps)
@@ -202,7 +205,8 @@ def wormhole_S3S3(q0, rmax, rmax_steps=3, uφ0=[0,0], xatol=10**-8, nr=1000, dis
         if ii+1 == rmax_steps:
             xatol_ii = xatol
 
-        print('    rmax = {:.4f} with xatol = {}'.format(rmax_ii, xatol_ii))
+        if not quiet:
+            print('    rmax = {:.4f} with xatol = {}'.format(rmax_ii, xatol_ii))
 
         # Shooting method: determine u0,φ0 to match boundary conditions/scaling solutions at r>>q0
         opt = minimize(lambda uφ0: objective_S3S3(uφ0, q0, rmax_ii, display_progress=display_progress),
@@ -214,12 +218,16 @@ def wormhole_S3S3(q0, rmax, rmax_steps=3, uφ0=[0,0], xatol=10**-8, nr=1000, dis
                       )
         uφ0_best = opt.x
 
-        # Print results
-        print('{:>14} : {}'.format('f_eval', opt.nfev))
-        print('{:>14} : {:+.10g}'.format('u0', uφ0_best[0]))
-        print('{:>14} : {:+.10g}'.format('φ0', uφ0_best[1]))
-        print('{:>14} : {:.10g}'.format('val', opt.fun))
+        if not quiet:
+            # Print results
+            print('{:>14} : {}'.format('f_eval', opt.nfev))
+            print('{:>14} : {:+.10g}'.format('u0', uφ0_best[0]))
+            print('{:>14} : {:+.10g}'.format('φ0', uφ0_best[1]))
+            print('{:>14} : {:.10g}'.format('val', opt.fun))
 
+    if quiet:
+        print(' DONE: val_final = {:.10g}'.format(opt.fun))
+    
     # Get numerical solution for optimial initial conditions
     soln = solve_S3S3(q0, rmax, *uφ0_best, nr=nr)
 
@@ -320,9 +328,9 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-8, nr=1000):
     flux2sqr = 6*np.exp(-4*u0+φ0) * q0**6 * (1 + f0m2 * (1 - 1/6 * q0**2 * np.exp(2*φ0) * χ1**2))
 
     
-    if f0m2 < 0 or flux2sqr < 0:
+    if f0m2 < 0:
         # Regular solutions must have f0**2>0 and χ1**2>0
-        return np.array([f0m2, flux2sqr])
+        return f0m2
 
     f0 = f0m2**(-1/2)
 
@@ -364,86 +372,94 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-8, nr=1000):
                      method='RK45'
                     )
 
-    # Return (r, f, u, ud, v, vd, φ, φd, χ, χd, h)
-    return [soln.t, *soln.y, np.sqrt(flux2sqr)]
+    # Return (r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2sqr)
+    return [soln.t, *soln.y, flux2sqr]
 
-def objective_T11(uv0, χ1, q0, rmax, rmin=10**-8, nr=1000, display_progress=False):
+def objective_T11(uvχ, q0, χinf, rmax, rmin=10**-8, nr=1000, display_progress=False):
     """Objective function to be minimized during shooting method."""
 
-    soln = solve_T11(q0, *uv0, 0, χ1, rmax, rmin)
+    u0, v0, χ1 = uvχ
 
-    if len(soln) == 2:
-        # Invlid (f0**2<0): return (const.)+|f0| to drive towards f0**2>0
+
+    soln = solve_T11(q0, u0, v0, 0, χ1, rmax, rmin)
+
+    if len(soln) == 1:
+        # Invlid (f0**2<0): return (const.)+|f0| to drive towards f0**2 > 0
         if display_progress:
-            print('{:24.20f} {:24.20f} {:24.20f}\tinvalid'.format(*uv0))
+            print('{:24.20f} {:24.20f} {:24.20f}\tinvalid'.format(*uvχ))
 
-        value = 10**8 + sum(abs(soln[soln < 0]))
+        value = 10**8 + abs(soln)
 
     else:
         # Unpack solution
-        r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
+        r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2sqr = soln
 
         value = 1 + 10**3 * (rmax/r[-1] - 1)
 
         if r[-1] == rmax:
-            value -= 1/(1 + ((u[-1] + 0.25*v[-1]) + r[-1]*(ud[-1] + 0.25*vd[-1])/8)**2 \
-                        + (v[-1] + r[-1]*vd[-1]/6)**2)
+            uvinf_est = (u[-1] + 0.25*v[-1]) + r[-1]*(ud[-1] + 0.25*vd[-1])/8
+            vinf_est = v[-1] + r[-1]*vd[-1]/6
+            φinf_est = φ[-1] + r[-1]*φd[-1]/4
+            χinf_est = np.exp(φinf_est)*(χ[-1] + r[-1]*χd[-1]/4)
+
+            value -= 1/(1 + uvinf_est**2 + vinf_est**2 + (χinf_est - χinf)**2)
+
             if display_progress:
-                print('{:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uv0, r[-1], value))
+                print('{:24.20f} {:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uvχ, r[-1], value))
 
         else:
             value += u[-1]**2 + v[-1]**2
 
             if display_progress:
-                print('{:24.20f} {:24.20f}\tsingular: {:4.2f}\t{:46.40f}'.format(*uv0, r[-1], value))
+                print('{:24.20f} {:24.20f} {:24.20f}\tsingular: {:4.2f}\t{:46.40f}'.format(*uvχ, r[-1], value))
 
     return value
 
-def paramScan_T11(q0, χ1, u0_bounds, v0_bounds, u0_steps, v0_steps, rmax):
-    """Displays the objective function for a grid of u0,v0 values."""
+# def paramScan_T11(q0, χ1, u0_bounds, v0_bounds, u0_steps, v0_steps, rmax):
+#     """Displays the objective function for a grid of u0,v0 values."""
 
-    u0_list = np.linspace(u0_bounds[0], u0_bounds[1], u0_steps)
-    v0_list = np.linspace(v0_bounds[0], v0_bounds[1], v0_steps)
+#     u0_list = np.linspace(u0_bounds[0], u0_bounds[1], u0_steps)
+#     v0_list = np.linspace(v0_bounds[0], v0_bounds[1], v0_steps)
 
-    data = []
+#     data = []
 
-    for u0, v0 in tqdm(product(u0_list, v0_list), total=len(u0_list)*len(v0_list)):
-        quality = objective_T11([u0, v0], χ1, q0, rmax)
-        data.append([u0, v0, quality])
+#     for u0, v0 in tqdm(product(u0_list, v0_list), total=len(u0_list)*len(v0_list)):
+#         quality = objective_T11([u0, v0], χ1, q0, rmax)
+#         data.append([u0, v0, quality])
     
-    data = np.asarray(data).T
+#     data = np.asarray(data).T
 
-    plotData = data[:, data[2] < 1000]
+#     plotData = data[:, data[2] < 1000]
 
-    fig, ax = plt.subplots(1, 1, figsize=(13, 5))
-    im = plt.tricontourf(plotData[0], plotData[1], plotData[2],
-                         levels=20,
-                         cmap='cet_CET_L12_r',
-                         origin='lower',
-                         extent=(u0_list[0], u0_list[-1], v0_list[0], v0_list[-1])
-                        )
+#     fig, ax = plt.subplots(1, 1, figsize=(13, 5))
+#     im = plt.tricontourf(plotData[0], plotData[1], plotData[2],
+#                          levels=20,
+#                          cmap='cet_CET_L12_r',
+#                          origin='lower',
+#                          extent=(u0_list[0], u0_list[-1], v0_list[0], v0_list[-1])
+#                         )
 
-    plt.xlim(u0_list[0], u0_list[-1])
-    plt.ylim(v0_list[0], v0_list[-1])
+#     plt.xlim(u0_list[0], u0_list[-1])
+#     plt.ylim(v0_list[0], v0_list[-1])
 
-    plt.xlabel('$u_0$')
-    plt.ylabel('$v_0$')
+#     plt.xlabel('$u_0$')
+#     plt.ylabel('$v_0$')
 
-    plt.colorbar(im)
+#     plt.colorbar(im)
 
-    plt.show()
+#     plt.show()
 
-def wormhole_T11(q0, χ1, rmax, rmax_steps=3, uv0=[0,0], xatol=10**-8, nr=1000, display_progress=False, quiet=False):
+def wormhole_T11(q0, χinf, rmax, rmax_steps=3, uvχ=[0,0,0], xatol=10**-8, nr=1000, display_progress=False, quiet=False):
     """Return optimal solution out to r=rmax for q0 and with r=0 boundary conditions found using shooting method."""
 
     end=''
     if not quiet:
         end='\n'
-    print('Performing shooting method for q0 = {:.2f} and χ0p = {:.2f} out to r = {:.2f} ...'.format(q0, χ1, rmax), end=end)
+    print('Performing shooting method for q0 = {:.2f} and χinf = {:.2f} out to r = {:.2f} ...'.format(q0, χinf, rmax), end=end)
 
-    # Optimize several times, increasing rmax and updating (u0,v0) at each step
+    # Optimize several times, increasing rmax and updating (u0,v0,χ1) at each step
     rmax_list = np.geomspace(q0, rmax, rmax_steps)
-    uv0_best = uv0
+    uvχ_best = uvχ
 
     for ii, rmax_ii in enumerate(rmax_list):
         
@@ -456,28 +472,31 @@ def wormhole_T11(q0, χ1, rmax, rmax_steps=3, uv0=[0,0], xatol=10**-8, nr=1000, 
             print('    rmax = {:.4f} with xatol = {}'.format(rmax_ii, xatol_ii))
 
         # Shooting method: determine u0,v0 to match boundary conditions/scaling solutions at r>>q0
-        opt = minimize(lambda uv0: objective_T11(uv0, χ1, q0, rmax_ii, display_progress=display_progress),
-                       x0=uv0_best,
+        opt = minimize(lambda uvχ: objective_T11(uvχ, q0, χinf, rmax_ii, display_progress=display_progress),
+                       x0=uvχ_best,
                        method='Nelder-Mead',
                        options={'maxfev': 1000,
                                 'xatol': xatol_ii,
                                }
                       )
-        uv0_best = opt.x
+        uvχ_best = opt.x
+        if χinf == 0:
+            uvχ_best[2] = 0
 
         if not quiet:
             # Print results
             print('{:>14} : {}'.format('f_eval', opt.nfev))
-            print('{:>14} : {:+.10g}'.format('u0', uv0_best[0]))
-            print('{:>14} : {:+.10g}'.format('v0', uv0_best[1]))
+            print('{:>14} : {:+.10g}'.format('u0', uvχ_best[0]))
+            print('{:>14} : {:+.10g}'.format('v0', uvχ_best[1]))
+            print('{:>14} : {:+.10g}'.format('χ1', uvχ_best[2]))
             print('{:>14} : {:.10g}\n'.format('val', opt.fun))
 
     if quiet:
         print(' DONE: val_final = {:.10g}'.format(opt.fun))
 
     # Get numerical solution for optimial initial conditions
-    soln = solve_T11(q0, *uv0_best, 0, χ1, rmax, nr=nr)
-    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
+    soln = solve_T11(q0, uvχ_best[0], uvχ_best[1], 0, uvχ_best[2], rmax, nr=nr)
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2sqr = soln
 
     # Use SL(2,R) to pick φ(inf) -> 0
     φinf = φ[-1] + r[-1]*φd[-1]/4
