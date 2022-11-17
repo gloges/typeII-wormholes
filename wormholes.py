@@ -330,7 +330,7 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-8, nr=1000):
     
     if f0m2 < 0:
         # Regular solutions must have f0**2>0 and χ1**2>0
-        return f0m2
+        return [f0m2]
 
     f0 = f0m2**(-1/2)
 
@@ -384,11 +384,11 @@ def objective_T11(uvχ, q0, χinf, rmax, rmin=10**-8, nr=1000, display_progress=
     soln = solve_T11(q0, u0, v0, 0, χ1, rmax, rmin)
 
     if len(soln) == 1:
-        # Invlid (f0**2<0): return (const.)+|f0| to drive towards f0**2 > 0
+        # Invalid (f0**2<0): return (const.)+|f0| to drive towards f0**2 > 0
         if display_progress:
             print('{:24.20f} {:24.20f} {:24.20f}\tinvalid'.format(*uvχ))
 
-        value = 10**8 + abs(soln)
+        value = 10**8 + abs(soln[0])
 
     else:
         # Unpack solution
@@ -400,9 +400,11 @@ def objective_T11(uvχ, q0, χinf, rmax, rmin=10**-8, nr=1000, display_progress=
             uvinf_est = (u[-1] + 0.25*v[-1]) + r[-1]*(ud[-1] + 0.25*vd[-1])/8
             vinf_est = v[-1] + r[-1]*vd[-1]/6
             φinf_est = φ[-1] + r[-1]*φd[-1]/4
-            χinf_est = np.exp(φinf_est)*(χ[-1] + r[-1]*χd[-1]/4)
+            χinf_est1 = np.exp(φinf_est)*(χ[-1])
+            χinf_est2 = np.exp(φinf_est)*(χ[-1] + r[-1]*χd[-1]/4)
+            χinf_dist = np.max([abs(χinf_est1 - χinf), abs(χinf_est2 - χinf)])
 
-            value -= 1/(1 + uvinf_est**2 + vinf_est**2 + (χinf_est - χinf)**2)
+            value -= 1/(1 + uvinf_est**2 + vinf_est**2 + χinf_dist**2)
 
             if display_progress:
                 print('{:24.20f} {:24.20f} {:24.20f}\t   good!: {:4.2f}\t{:46.40f}'.format(*uvχ, r[-1], value))
@@ -462,9 +464,9 @@ def wormhole_T11(q0, χinf, rmax, rmax_steps=3, uvχ=[0,0,0], xatol=10**-8, nr=1
     uvχ_best = uvχ
 
     for ii, rmax_ii in enumerate(rmax_list):
-        
+
         # Use lower precision except for final optimization
-        xatol_ii = 10**-4
+        xatol_ii = 10**-2
         if ii+1 == rmax_steps:
             xatol_ii = xatol
 
@@ -473,12 +475,12 @@ def wormhole_T11(q0, χinf, rmax, rmax_steps=3, uvχ=[0,0,0], xatol=10**-8, nr=1
 
         # Shooting method: determine u0,v0 to match boundary conditions/scaling solutions at r>>q0
         opt = minimize(lambda uvχ: objective_T11(uvχ, q0, χinf, rmax_ii, display_progress=display_progress),
-                       x0=uvχ_best,
-                       method='Nelder-Mead',
-                       options={'maxfev': 1000,
+                    x0=uvχ_best,
+                    method='Nelder-Mead',
+                    options={'maxfev': 1000,
                                 'xatol': xatol_ii,
-                               }
-                      )
+                            }
+                    )
         uvχ_best = opt.x
         if χinf == 0:
             uvχ_best[2] = 0
