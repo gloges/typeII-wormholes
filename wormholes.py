@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.integrate import solve_ivp, quad
-from scipy.optimize import minimize
+from scipy.optimize import minimize, curve_fit
 import matplotlib.pyplot as plt
 from itertools import product
 from tqdm import tqdm
@@ -293,6 +293,12 @@ def massless_approx_S3S3(q0):
 ###################################################################################################
 
 
+def masslessScalarFit(r, cinf, c4, c6):
+    return cinf + c4/r**4 + c6/r**6
+
+def masslessScalarFit_alt(r, c4, c6):
+    return -4*c4 - 6*c6/r**2
+
 def V_T11(u, v):
     """Scalar potential V(u,v) for T11."""
     return 2*np.exp(-8/3*(4*u+v)) * (2*np.exp(4*u+4*v) - 12*np.exp(6*u+2*v) + 4)
@@ -528,7 +534,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-10, display=Non
         uv0_best = opt.x
 
         if opt.fun > 1:
-            print('Failed to converge')
+            print('\tFailed to converge')
             return None, opt.fun
 
     # Print results
@@ -548,7 +554,12 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-10, display=Non
     r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
 
     # Use an SL(2,R) transformation to set φ(infty) = 0
-    φinf = φ[-1] + r[-1]*φd[-1]/4
+    # First estimate the current value of φ(infty)
+    mask = (r > rmax/2)
+    popt, pcov = curve_fit(masslessScalarFit, r[mask]/q0, φ[mask])
+    φinf = popt[0]
+
+    # Next shift φ while simultaneously rescaling χ and the flux
     soln[6] -= φinf
     soln[8] *= np.exp(φinf)
     soln[9] *= np.exp(φinf)
