@@ -5,9 +5,6 @@ import matplotlib.pyplot as plt
 from itertools import product
 from tqdm import tqdm
 
-# TODO Flesh out docstrings
-# TODO Check optional argument default values
-
 
 def Q(r, q0):
     """Returns q=sqrt(q0^2 + r^2)."""
@@ -130,12 +127,14 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-6, nr=1000):
     y0 = (f_start, u_start, ud_start, φ_start, φd_start, h_start)
     args = (q0, flux4)
 
+    t_eval = np.geomspace(2*rmin, 0.999999 * rmax, nr)     # had some fp issues
+
     soln = solve_ivp(ODEs_S3S3, (rmin, rmax),
                      y0=y0,
                      args=args,
                      events=(f_event),  # halt if f gets too large
-                     t_eval=np.geomspace(rmin, rmax, nr),
                      rtol=10**-8,
+                     t_eval=t_eval,
                      method='RK45'
                     )
 
@@ -155,7 +154,7 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display=None):
         # Unpack solution
         r, f, u, ud, φ, φd, h, flux4 = soln
 
-        if r[-1] == rmax:
+        if r[-1] > 0.99 * rmax:
             # Regular solution out to r=rmax: reward if u,φ are approaching zero
 
             Δ1 = (3/2) + np.sqrt((3/2)**2 + 6)  # Conformal dimension for light mode
@@ -414,11 +413,13 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-6, nr=1000):
     y0 = (f_start, u_start, ud_start, v_start, vd_start, φ_start, φd_start, χ_start, χd_start, h_start)
     args = (q0, flux2)
 
+    t_eval = np.geomspace(2*rmin, 0.999999 * rmax, nr)     # had some fp issues
+
     soln = solve_ivp(ODEs_T11, (rmin, rmax),
                      y0=y0,
                      args=args,
                      events=(f_event),  # halt if f gets too large
-                     t_eval=np.geomspace(rmin, rmax, nr),
+                     t_eval=t_eval,
                      rtol=10**-8,
                      method='RK45'
                     )
@@ -444,7 +445,7 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display=None):
         # Unpack solution
         r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
 
-        if r[-1] == rmax:
+        if r[-1] > 0.99 * rmax:
             # Regular solution out to r=rmax: reward if u,v and χd are approaching zero
 
             # Estimate the values of u,v at r=infty using
