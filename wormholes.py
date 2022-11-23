@@ -172,7 +172,7 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display=None):
             value = 1 + 10**3 * (rmax/r[-1] - 1) + u[-1]**2 + φ[-1]**2
 
     # Print ICs and objective function
-    if display is 'progress':
+    if display == 'progress':
         print('{:19.15f} {:19.15f} \t {:8.4f} {:46.40f}'.format(*uφ0, r[-1], value))
 
     return value
@@ -235,10 +235,10 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-10, display=None):
         uφ0_best = opt.x
 
     # Print results
-    if display is 'quiet':
+    if display == 'quiet':
         print('\tDONE: value = {:.4g}'.format(opt.fun))
 
-    elif display is 'summary':
+    elif display == 'summary':
         print('\n{:>14} : {}'.format('success', opt.success))
         print('{:>14} : {}'.format('f_eval', opt.nfev))
         print('{:>14} : {:+.10g}'.format('u0', uφ0_best[0]))
@@ -465,7 +465,7 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display=None):
             value = 1 + 10**3 * (rmax/r[-1] - 1) + u[-1]**2 + v[-1]**2
 
     # Print ICs and objective function
-    if display is 'progress':
+    if display == 'progress':
         print('{:19.15f} {:19.15f} \t {:8.4f} {:46.40f}'.format(*uv0, r[-1], value))
 
     return value
@@ -538,10 +538,10 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-10, display=Non
             return None, opt.fun
 
     # Print results
-    if display is 'quiet':
+    if display == 'quiet':
         print('\tDONE: value = {:.4g}'.format(opt.fun))
 
-    elif display is 'summary':
+    elif display == 'summary':
         print('\n{:>14} : {}'.format('success', opt.success))
         print('{:>14} : {}'.format('f_eval', opt.nfev))
         print('{:>14} : {:+.10g}'.format('u0', uv0_best[0]))
