@@ -456,12 +456,11 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display=None):
             # φinf_est = φ[-1] + r[-1]*φd[-1]/4
             χdinf_est = χd[-1] + r[-1]*((χd[-1] - χd[-2])/(r[-1] - r[-2]))/5
 
-            # Reward when the extrapolated values φ(infty) and (u+0.1φ)(infty) are small
-            # value -= 1/(1 + uvinf_est**2 + vinf_est**2 + χinf_dist**2)
+            # Reward when the extrapolated values u(infty), v(infty) and χ'(infty) are small
             value = 1 - 1/(1 + uinf_est**2 + vinf_est**2 + χdinf_est**2)
 
         else:
-            # Singular solution: penalize to drive towards nonsingular u,v,φ,...
+            # Singular solution: penalize to drive towards nonsingular u,v,...
             value = 1 + 10**3 * (rmax/r[-1] - 1) + u[-1]**2 + v[-1]**2
 
     # Print ICs and objective function
@@ -518,8 +517,8 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-10, display=Non
     #     xatol_list.insert(0, 0.1)
 
     # Keep track of best ICs (initial guess made with hindsight)
-    u0_best = min(-0.06, +0.2446*np.log(q0) + 0.1143)
-    v0_best = max(+0.12, -0.2514*np.log(q0) + 0.0969)
+    u0_best = min(-0.06, +0.25*np.log(q0) + 0.1)
+    v0_best = max(+0.12, -0.25*np.log(q0) + 0.1)
     uv0_best = [u0_best, v0_best]
     
 
@@ -591,6 +590,7 @@ def symmetrize_T11(soln):
     return r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2
 
 def massless_approx_T11(q0):
+    """Returns T11 field ranges and flux for V=-12."""
     
     # Taking h(0) = 0, first compute h(inf)
     h_inf, err = quad(lambda x: q0**-3 * x**3 * (q0**2 + x**2 - (1+q0**2)*x**8)**(-1/2),
@@ -608,6 +608,7 @@ def massless_approx_T11(q0):
     return u0, v0, φ0, flux2
 
 def frozen_approx_T11(q0):
+    """Returns T11 fields ranges and flux for u,v frozen to zero."""
 
     # Taking h(0) = 0, first compute h(inf)
     h_inf, err = quad(lambda x: q0**-3 * x**3 * (q0**2 + x**2 - (1+q0**2)*x**8)**(-1/2),
@@ -622,61 +623,24 @@ def frozen_approx_T11(q0):
 
     return 0, 0, φ0, flux2
 
-# def ODE_φ(r, y, q0, f3sqr):
+def ricci_5D(q0, soln):
 
-#     φ, φd = y
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
 
-#     q = Q(r, q0)
-#     qd = Qd(r, q0)
-#     qdd = Qdd(r, q0)
+    q = Q(r, q0)
+    qd = Qd(r, q0)
 
-#     φ_d = φd
+    R5 = (12/q**2) * (qd**2/f**2 - 1) + 8/3 * V_T11(u, v)
 
-#     f = qd / np.sqrt(1 + q**2 - q0**6 * (1+q0**2)/q**6)
+    return R5
 
-#     # Equation of motion
-#     prefactor = qdd/qd - qd/q - f**2/(q*qd) * (3 + 4*q**2)
-    
-#     φd_d = prefactor*φd - f3sqr*np.exp(-φ) * f**2/(2*q**8)
+def ricci_10D(q0, soln):
 
-#     return φ_d, φd_d
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
 
+    q = Q(r, q0)
 
-# def wormhole_frozen_T11(q0, rmax, nr=1000):
+    R10 = (1/4)*np.exp(2/3*(4*u+v)) * (2*(φd**2 - np.exp(2*φ)*χd**2)/f**2 \
+                                       + flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8)
 
-#     rmin = 10**-8
-
-#     r = np.geomspace(rmin, rmax, nr)
-
-#     q = Q(r, q0)
-#     qd = Qd(r, q0)
-
-#     c_abs = 24*q0**6 * (1 + q0**2)
-
-#     f = qd / np.sqrt(1 + q**2 - q0**6 * (1+q0**2)/q**6)
-#     f[0] = 1 / np.sqrt(3 + 4*q0**2)
-
-#     u0, v0, φ0, f3, h_inf = frozen_approx_T11(q0)
-
-#     f3 = np.sqrt(c_abs) / np.cos(0.5*np.sqrt(c_abs) * h_inf)
-
-
-#     soln = solve_ivp(ODE_φ, (rmin, rmax),
-#                      y0=[φ0, 0],
-#                      args=[q0, f3**2],
-#                      t_eval=r,
-#                      rtol=10**-12,
-#                      method='RK45'
-#                     )
-#     φ, φd = soln.y
-
-#     φ -= φ[-1] + r[-1]*φd[-1]/4
-
-#     u = 0*r
-#     ud = 0*r
-#     v = 0*r
-#     vd = 0*r
-
-#     soln = [r, f, u, ud, v, vd, φ, φd, 0*r, f3**2]
-
-#     return symmetrize_T11(soln)
+    return R10
