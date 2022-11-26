@@ -450,18 +450,20 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display=None):
             # Estimate the values of u,v at r=infty using
             # the expected power-law solutions, u,v ~ r^(-6) and χd ~ r^(-5)
 
-            # uvinf_est = (u[-1] + 0.25*v[-1]) + r[-1]*(ud[-1] + 0.25*vd[-1])/8
+            uvinf_est = (u[-1] + 0.25*v[-1]) + r[-1]*(ud[-1] + 0.25*vd[-1])/8
             uinf_est = u[-1] + r[-1]*ud[-1]/6
             vinf_est = v[-1] + r[-1]*vd[-1]/6
             # φinf_est = φ[-1] + r[-1]*φd[-1]/4
             χdinf_est = χd[-1] + r[-1]*((χd[-1] - χd[-2])/(r[-1] - r[-2]))/5
 
             # Reward when the extrapolated values u(infty), v(infty) and χ'(infty) are small
-            value = 1 - 1/(1 + uinf_est**2 + vinf_est**2 + χdinf_est**2)
+            # value = 1 - 1/(1 + uinf_est**2 + vinf_est**2 + χdinf_est**2)
+            value = 1 - 1/(1 + uvinf_est**2 + vinf_est**2)
 
         else:
             # Singular solution: penalize to drive towards nonsingular u,v,...
             value = 1 + 10**3 * (rmax/r[-1] - 1) + u[-1]**2 + v[-1]**2
+            uinf_est, vinf_est, χdinf_est = 0, 0, 0
 
     # Print ICs and objective function
     if display == 'progress':
@@ -508,8 +510,8 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-10, display=Non
     #  - If q0 < 1 it helps to first integrate out to r=q0 with low precision
     #  - Integrate out to r=max(1, q0) where AdS scaling solutions begin with low precision
     #  - Finally, integrate out to r=rmax at higher precision
-    rmax_list = [max(1, q0), rmax]
-    xatol_list = [0.1, xatol]
+    rmax_list = [max(1, q0), np.sqrt(max(1, q0)*rmax), rmax]
+    xatol_list = [0.0001, np.sqrt(0.0001*xatol), xatol]
     
 
     # if q0 < 1:
@@ -532,9 +534,9 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-10, display=Non
         # Record best (u0,v0) found
         uv0_best = opt.x
 
-        if opt.fun > 1:
-            print('\tFailed to converge')
-            return None, opt.fun
+    if opt.fun > 1:
+        print('\tFailed to converge')
+        return None, opt.fun
 
     # Print results
     if display == 'quiet':
@@ -554,7 +556,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-10, display=Non
 
     # Use an SL(2,R) transformation to set φ(infty) = 0
     # First estimate the current value of φ(infty)
-    mask = (r > rmax/2)
+    mask = (r > rmax/1.5)
     popt, pcov = curve_fit(masslessScalarFit, r[mask]/q0, φ[mask])
     φinf = popt[0]
 
