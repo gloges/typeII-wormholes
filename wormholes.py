@@ -239,18 +239,21 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
         print('S3xS3: (q0, rmax) = ({:.6f}, {:.6f})...'.format(q0, rmax))
 
     # Perform shooting method a few times, increasing stop point of integration with each step:
-    #  - If q0 < 1 it helps to first integrate out to r=q0 with low precision.
     #  - Integrate out to r=max(1, q0), where AdS scaling solutions begin, with low precision.
     #  - Finally, integrate out to r=rmax at higher precision.
-    rmax_list = [max(1, q0), rmax]
-    xatol_list = [0.1, xatol]
+    # rmax_list = [max(1, q0), rmax]
+    # xatol_list = [0.1, xatol]
+    rmax_list = [max(1, q0), np.sqrt(max(1, q0)*rmax), rmax]
+    xatol_list = [0.0001, np.sqrt(0.0001*xatol), xatol]
 
-    if q0 < 1:
-        rmax_list.insert(0, q0)
-        xatol_list.insert(0, 0.1)
+    # if q0 < 1:
+    #     rmax_list.insert(0, q0)
+    #     xatol_list.insert(0, 0.1)
 
-    # Keep track of best ICs
-    uφ0_best = [0, 0]
+    # Keep track of best ICs (initial guess made with hindsight)
+    u0_best = -0.05 - 0.73/(1 + 13.5/q0)
+    φ0_best = +1.56 - 1.36/(1 + 0.12/q0)
+    uφ0_best = [u0_best, φ0_best]
 
     for rm, xat in zip(rmax_list, xatol_list):
         # Shooting method: optimize (u0,φ0) to match AdS BCs
@@ -710,9 +713,8 @@ def ricci_10D(q0, soln):
 
     # Get 10D Ricci scalar as a function of r
     # (this has been simplified using the equations of motion)
-    R10 = (1/4)*np.exp(2/3*(4*u+v)) * (2*(φd**2 - np.exp(2*φ)*χd**2)/f**2 \
-                                       + flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8)
-    #TODO - Double check the 10D Ricci scalar
+    R10 = np.exp(2/3*(4*u+v)) * ((1/2)*(φd**2 - np.exp(2*φ)*χd**2)/f**2 \
+                                 + (1/4)*flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8)
 
     return R10
 
