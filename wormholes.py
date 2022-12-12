@@ -1,6 +1,12 @@
+"""Construct wormhole solutions for massive type IIA on S3xS3 and for type IIB on T1,1."""
+
 import numpy as np
 from scipy.integrate import solve_ivp, quad
 from scipy.optimize import minimize, curve_fit
+
+
+Δ1_S3S3 = (3/2) + np.sqrt((3/2)**2 + 6)
+Δ2_S3S3 = (3/2) + np.sqrt((3/2)**2 + 20)
 
 
 #TODO - Address 'flux' names and make sure they reflect conventions in paper.
@@ -146,8 +152,8 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
     motion for the given wormhole size and initial conditions matches
     to AdS boundary conditions at r -> infty. The required boundary
     conditions are f ~ 1/r, u ~ 1/r^Δ and φ ~ 1/r^Δ, while the heavy
-    mode goes to zero more quickly: 10u+φ ~ 1/r^6. (The conformal
-    dimension of the light mode is Δ = (3+sqrt(33))/2 = 4.3722...)
+    mode goes to zero more quickly: 10u+φ ~ 1/r^6. (The conformal dimension
+    of the light mode is Δ = (3/2) + sqrt((3/2)**2 + 6) = 4.3722...)
     
     There are three cases, with a value of zero being optimal:
     
@@ -190,13 +196,11 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
         else:
             # Regular solution out to r=rmax: reward if u,φ are approaching zero
 
-            Δ = (3/2) + np.sqrt((3/2)**2 + 6)  # Conformal dimension for light mode
-
             # Estimate the values of φ and u+0.1φ (the heavy mode) at r=infty using
             # the expected power-law solutions, φ ~ 1/r^Δ and (u+0.1φ) ~ 1/r^6.
             # For example, solving φ = φinf + A/r^Δ + (subleading) and
             # φ' = -Δ*A/r^(Δ+1) + (subleading) for φinf gives φinf ~= φ + r*φ'/Δ.
-            φinf_est = φ[-1] + r[-1]*φd[-1]/Δ
+            φinf_est = φ[-1] + r[-1]*φd[-1]/Δ1_S3S3
             uφinf_est = (u[-1] + 0.1*φ[-1]) + r[-1]*(ud[-1] + 0.1*φd[-1])/6
 
             # Reward when the extrapolated values φ(infty) and (u+0.1φ)(infty) are small
@@ -238,17 +242,9 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
     if display_summary:
         print('S3xS3: (q0, rmax) = ({:.6f}, {:.6f})...'.format(q0, rmax))
 
-    # Perform shooting method a few times, increasing stop point of integration with each step:
-    #  - Integrate out to r=max(1, q0), where AdS scaling solutions begin, with low precision.
-    #  - Finally, integrate out to r=rmax at higher precision.
-    # rmax_list = [max(1, q0), rmax]
-    # xatol_list = [0.1, xatol]
+    # Perform shooting method a few times, increasing stop point of integration with each step
     rmax_list = [max(1, q0), np.sqrt(max(1, q0)*rmax), rmax]
     xatol_list = [0.0001, np.sqrt(0.0001*xatol), xatol]
-
-    # if q0 < 1:
-    #     rmax_list.insert(0, q0)
-    #     xatol_list.insert(0, 0.1)
 
     # Keep track of best ICs (initial guess made with hindsight)
     u0_best = -0.05 - 0.73/(1 + 13.5/q0)
@@ -312,6 +308,45 @@ def massless_approx_S3S3(q0):
     u0 = -0.5*φ0
 
     return u0, φ0, flux4
+
+def myLightMode_S3S3(q, a, b):
+    return a + b/q**(6-Δ1_S3S3)
+
+def fitLightMode_S3S3(q0, r, u, φ, mask):
+
+    q = Q(r, q0)
+    popt, pcov = curve_fit(myLightMode_S3S3,
+                           q[mask],
+                           q[mask]**Δ1_S3S3 * (5*φ[mask]-6*u[mask])
+                          )
+    
+    rr = np.geomspace(min(r[mask]), max(r[mask]), 1000)
+    ff = myLightMode_S3S3(Q(rr, q0), *popt) / Q(rr, q0)**Δ1_S3S3
+
+    a, b = popt
+    label = f'$({a:.2f})$' + r'$/r^{\Delta_1}$' + f'$+({b:.2f})$' + r'$/r^6$'
+
+    return rr, ff, label
+
+def myHeavyMode_S3S3(q, a, b):
+    return a + b/q**(Δ2_S3S3-6)
+
+def fitHeavyMode_S3S3(q0, r, u, φ, mask):
+
+    q = Q(r, q0)
+    popt, pcov = curve_fit(myHeavyMode_S3S3,
+                           q[mask],
+                           q[mask]**6 * (-φ[mask]-10*u[mask])
+                          )
+    
+    rr = np.geomspace(min(r[mask]), max(r[mask]), 1000)
+    ff = myHeavyMode_S3S3(Q(rr, q0), *popt) / Q(rr, q0)**6
+
+    a, b = popt
+    label = f'$({a:.2f})/r^6$' + f'$+({b:.2f})$' + r'$/r^{\Delta_2}$'
+
+    return rr, ff, label
+
 
 #!SECTION
 
@@ -421,11 +456,10 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-6, nr=1000):
     dVdu = dVdu_T11(u0, v0)
     dVdv = dVdv_T11(u0, v0)
     flux_term_1 = flux2**2 * np.exp(4*u0-φ0) / q0**8
-    flux_term_2 = flux2**2 * np.exp(4*u0-φ0) / q0**8 
 
     udd0 = f0**2 * ( (1/16)*dVdu - (1/16)*dVdv + (1/8)*flux_term_1)
     vdd0 = f0**2 * (-(1/16)*dVdu + (7/16)*dVdv - (1/8)*flux_term_1)
-    φdd0 = -np.exp(2*φ0)*χ1**2 - (1/2)*f0**2 * flux_term_2
+    φdd0 = -np.exp(2*φ0)*χ1**2 - (1/2)*f0**2 * flux_term_1
 
     fdd0 = (f0**3 * q0**2 / 12) * (6*(3+f0**(-2))/q0**4 + udd0*dVdu + vdd0*dVdv)
     
@@ -682,12 +716,12 @@ def frozen_approx_T11(q0):
     return 0, 0, φ0, flux2
 
 def masslessScalarFit(r, ψinf, ψ4, ψ6):
-    """Functional form of a massless scalar, ψ, for r -> infty."""
+    """Functional form of a massless scalar on T11, ψ, for r -> infty."""
     return ψinf + ψ4/r**4 + ψ6/r**6
 
 def masslessScalarFit_alt(r, ψ4, ψ6):
     """Functional form of r^5(dψ/dr) if ψ ~ 0 + ψ4/r^4 + ψ6/r^6
-    is a massless scalar which goes to zero for r -> infty."""
+    is a massless scalar on T11 which goes to zero for r -> infty."""
     return -4*ψ4 - 6*ψ6/r**2
 
 def ricci_5D(q0, soln):
@@ -695,7 +729,7 @@ def ricci_5D(q0, soln):
 
     # Unpack and get q(r) and q'(r)
     r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
-    q = Q(r, q0)
+    q  =  Q(r, q0)
     qd = Qd(r, q0)
 
     # Get 5D Ricci scalar as a function of r
@@ -713,8 +747,8 @@ def ricci_10D(q0, soln):
 
     # Get 10D Ricci scalar as a function of r
     # (this has been simplified using the equations of motion)
-    R10 = np.exp(2/3*(4*u+v)) * ((1/2)*(φd**2 - np.exp(2*φ)*χd**2)/f**2 \
-                                 + (1/4)*flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8)
+    R10 = (1/4)*np.exp(2/3*(4*u+v)) * (2*(φd**2 - np.exp(2*φ)*χd**2)/f**2 \
+                                       + flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8)
 
     return R10
 
