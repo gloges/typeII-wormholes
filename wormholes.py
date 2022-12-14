@@ -9,9 +9,6 @@ from scipy.optimize import minimize, curve_fit
 Δ2_S3S3 = (3/2) + np.sqrt((3/2)**2 + 20)
 
 
-#TODO - Address 'flux' names and make sure they reflect conventions in paper.
-
-
 def Q(r, q0):
     """Returns q=sqrt(q0^2 + r^2).""" 
     return np.sqrt(q0**2 + r**2)
@@ -24,7 +21,7 @@ def Qdd(r, q0):
     """Returns second derivative of q=sqrt(q0^2 + r^2)."""
     return q0**2 / Q(r, q0)**3
 
-def f_event(r, y, q0, flux):
+def f_event(r, y, q0, charge):
     """Stops integration if f >> 1/q (appropriate for AdS)."""
     f = y[0]
     return f - 3/Q(r, q0)
@@ -45,14 +42,14 @@ def dVdφ_S3S3(u, φ):
     """φ-derivative of scalar potential V(u,φ) for S3xS3."""
     return -(5/2)*np.exp(-9*u-φ/2) + (5/2)*np.exp(-3*u+5*φ/2)
 
-def ODEs_S3S3(r, y, q0, flux4):
+def ODEs_S3S3(r, y, q0, charge):
     """ODEs describing the evolution of y=(f, u, u', φ, φ', h) for S3xS3.
 
     Args:
         r (float): Radial coordinate.
         y (list): Array of scalar functions of r, y=(f, u, u', φ, φ', h).
         q0 (float): Wormhole size.
-        flux4 (float): Flux associated with C3 axion.
+        charge (float): Axion charge associated to the RR field C3.
 
     Returns:
         list: Derivatives of y.
@@ -74,8 +71,8 @@ def ODEs_S3S3(r, y, q0, flux4):
     prefactor = qdd/qd - qd/q - f**2 / (q*qd) * (2 - (1/2)*q**2 * V_S3S3(u, φ))
     
     f_d  = (prefactor + 3*qd/q) * f
-    ud_d = prefactor*ud + f**2 * ((1/12)*dVdu_S3S3(u, φ) + (1/8)*flux4**2 * np.exp(3*u-φ/2)/q**6)
-    φd_d = prefactor*φd + f**2 * (       dVdφ_S3S3(u, φ) - (1/4)*flux4**2 * np.exp(3*u-φ/2)/q**6)
+    ud_d = prefactor*ud + f**2 * ((1/12)*dVdu_S3S3(u, φ) + (1/8)*charge**2 * np.exp(3*u-φ/2)/q**6)
+    φd_d = prefactor*φd + f**2 * (       dVdφ_S3S3(u, φ) - (1/4)*charge**2 * np.exp(3*u-φ/2)/q**6)
     h_d  = f/q**3
     
     # Return derivatives of f, u, ud, φ, φd and h
@@ -101,21 +98,21 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-6, nr=1000):
     Returns:
         array: If the initial conditions are invalid because f0**(-2) < 0,
             the array (f0**-2) for use in the shooting method. Otherwise,
-            the numerical wormhole solution, (r, f, u, ud, φ, φd, h, flux4),
-            where all but flux4 are arrays of length nr.
+            the numerical wormhole solution, (r, f, u, ud, φ, φd, h, charge),
+            where all but 'charge' are arrays of length nr.
     """
 
 
-    # Initial condition for f0 and the value of flux4^2 are set by u0 and φ0 (f0m2 := f0**(-2))
+    # Initial condition for f0 and the value of charge^2 are set by u0 and φ0 (f0m2 := f0**(-2))
     f0m2 = 2 - (1/2)*q0**2 * V_S3S3(u0, φ0)
-    flux4sqr = 4*np.exp(-3*u0+φ0/2) * q0**4 * (1 + f0m2)
+    charge_sqr = 4*np.exp(-3*u0+φ0/2) * q0**4 * (1 + f0m2)
     
     # Regular solutions must have f0^2 > 0. If not, return value of f0m2 for use in shooting method
     if f0m2 < 0:
         return [f0m2]
 
     f0 = f0m2**(-1/2)
-    flux4 = np.sqrt(flux4sqr)
+    charge = np.sqrt(charge_sqr)
 
     # Use series solutions (e.g. u = u0 + 1/2*udd0 * r^2 + ...)
     # to get initial conditions at r=rmin << q0
@@ -135,15 +132,15 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-6, nr=1000):
     # Solve!
     soln = solve_ivp(ODEs_S3S3, (rmin, rmax),
                      y0=(f_start, u_start, ud_start, φ_start, φd_start, h_start),
-                     args=(q0, flux4),
+                     args=(q0, charge),
                      events=(f_event),  # halt if f gets too large
                      t_eval=np.geomspace(rmin, rmax, nr),
                      rtol=10**-8,
                      method='RK45'
                     )
 
-    # Return (r, f, u, ud, φ, φd, h, flux4)
-    return [soln.t, *soln.y, flux4]
+    # Return (r, f, u, ud, φ, φd, h, charge)
+    return [soln.t, *soln.y, charge]
 
 def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
     """Objective function to be minimized during S3xS3 shooting method.
@@ -188,7 +185,7 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
         value = 10**8 + abs(soln[0])
     else:
         # Unpack solution
-        r, f, u, ud, φ, φd, h, flux4 = soln
+        r, f, u, ud, φ, φd, h, charge = soln
 
         if r[-1] < rmax:
             # Singular solution: penalize to drive towards nonsingular
@@ -234,8 +231,8 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
             shooting method. Defaults to False.
 
     Returns:
-        array: The numerical wormhole solution, (r, f, u, ud, φ, φd, h, flux4),
-            where all but flux4 are arrays of length 2*nr-1 (having been
+        array: The numerical wormhole solution, (r, f, u, ud, φ, φd, h, charge),
+            where all but 'charge' are arrays of length 2*nr-1 (having been
             symmetrized on the domain -rmax < r < rmax).
     """
 
@@ -278,7 +275,7 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
 def symmetrize_S3S3(soln):
     """Extend S3xS3 solutions from 0 < r < rmax to -rmax < r < rmax."""
 
-    r, f, u, ud, φ, φd, h, flux4 = soln
+    r, f, u, ud, φ, φd, h, charge = soln
 
     # Make functions even/odd about r=0
     r = np.append(-r[-1:0:-1], [r])
@@ -290,10 +287,10 @@ def symmetrize_S3S3(soln):
     ud = np.append(-ud[-1:0:-1], [ud])
     φd = np.append(-φd[-1:0:-1], [φd])
 
-    return r, f, u, ud, φ, φd, h, flux4
+    return r, f, u, ud, φ, φd, h, charge
 
 def massless_approx_S3S3(q0):
-    """Returns (u0,φ0) and flux for the massless "approximation" (assuming u,φ vanish at infinity)."""
+    """Returns (u0,φ0) and charge for the massless "approximation" (assuming u,φ vanish at infinity)."""
     
     # Taking h(0) = 0, first compute h(inf)
     h_inf, err = quad(lambda x: q0**-2 * x**2 * (q0**2 + x**2 - (1+q0**2)*x**6)**(-1/2),
@@ -303,11 +300,11 @@ def massless_approx_S3S3(q0):
     # φ = -2u has profile exp(φ) = cos(1/2 * sqrt(-c)*h) / cos(1/2 * sqrt(-c)*hinf),
     #   so φ(0) = -log[cos(1/2 * sqrt(-c)*hinf)]
     c_abs = 12*q0**4 * (1+q0**2)
-    flux4 = np.sqrt(c_abs) / np.cos(0.5 * np.sqrt(c_abs) * h_inf)
+    charge = np.sqrt(c_abs) / np.cos(0.5 * np.sqrt(c_abs) * h_inf)
     φ0 = -np.log(np.cos(0.5 * np.sqrt(c_abs) * h_inf))
     u0 = -0.5*φ0
 
-    return u0, φ0, flux4
+    return u0, φ0, charge
 
 def myLightMode_S3S3(q, a, b):
     return a + b/q**(6-Δ1_S3S3)
@@ -364,14 +361,14 @@ def dVdv_T11(u, v):
     """v-derivative of scalar potential V(u,v) for T11."""
     return (16/3)*np.exp(-8/3*(4*u+v)) * (np.exp(4*u+4*v) + 3*np.exp(6*u+2*v) - 4)
 
-def ODEs_T11(r, y, q0, flux2):
+def ODEs_T11(r, y, q0, charge2):
     """ODEs describing the evolution of y=(f, u, u', v, v', φ, φ', χ, χ', h) for T11.
 
     Args:
         r (float): Radial coordinate.
         y (list): Array of scalar functions of r, y=(f, u, u', v, v', φ, φ', χ, χ', h).
         q0 (float): Wormhole size.
-        flux2 (float): Flux associated with B2/C2 axion.    #TODO - Change this if needed.
+        charge2 (float): Axion charge associated with the RR field C2.
 
     Returns:
         list: Derivatives of y.
@@ -395,15 +392,15 @@ def ODEs_T11(r, y, q0, flux2):
     prefactor = qdd/qd - qd/q - f**2/(q*qd) * (3 - (1/3)*q**2 * V_T11(u, v))
     dVdu = dVdu_T11(u, v)
     dVdv = dVdv_T11(u, v)
-    flux_term_1 = flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8
-    flux_term_2 = flux2**2 * np.exp(4*u+φ) * (χ**2 + np.exp(-2*φ)) / q**8
-    flux_term_3 = flux2**2 * np.exp(4*u-φ) * χ / q**8
+    charge_term_1 = charge2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8
+    charge_term_2 = charge2**2 * np.exp(4*u+φ) * (χ**2 + np.exp(-2*φ)) / q**8
+    charge_term_3 = charge2**2 * np.exp(4*u-φ) * χ / q**8
     
     f_d  = (prefactor + 4*qd/q) * f
-    ud_d = prefactor*ud + f**2 * ( (1/16)*dVdu - (1/16)*dVdv - (1/8)*flux_term_1)
-    vd_d = prefactor*vd + f**2 * (-(1/16)*dVdu + (7/16)*dVdv + (1/8)*flux_term_1)
-    φd_d = prefactor*φd - np.exp(2*φ)*χd**2 - (1/2)*f**2 * flux_term_2
-    χd_d = prefactor*χd - 2*φd*χd + f**2 * flux_term_3
+    ud_d = prefactor*ud + f**2 * ( (1/16)*dVdu - (1/16)*dVdv - (1/8)*charge_term_1)
+    vd_d = prefactor*vd + f**2 * (-(1/16)*dVdu + (7/16)*dVdv + (1/8)*charge_term_1)
+    φd_d = prefactor*φd - np.exp(2*φ)*χd**2 - (1/2)*f**2 * charge_term_2
+    χd_d = prefactor*χd - 2*φd*χd + f**2 * charge_term_3
 
     h_d = f/q**4
 
@@ -431,35 +428,35 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-6, nr=1000):
 
     Returns:
         array: If the initial conditions are invalid (either f0**-2 < 0
-            or flux**2 < 0), the array (f0**-2, flux**2) for use in the
+            or charge2**2 < 0), the array (f0**-2, charge2**2) for use in the
             shooting method. Otherwise, the numerical wormhole solution,
-            (r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2), where all but
-            flux2 are arrays of length nr.
+            (r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge), where all but
+            'charge2' are arrays of length nr.
     """
 
-    # Initial condition for f0 and the value of flux2^2 are set
+    # Initial condition for f0 and the value of charge2^2 are set
     # by u0, v0, φ0 and χ1 (f0m2 := f0**(-2))
     f0m2 = 3 - 1/3 * q0**2 * V_T11(u0, v0)
-    flux2sqr = 6*np.exp(-4*u0+φ0) * q0**6 \
-               * (1 + f0m2 * (1 - (1/6)*q0**2 * np.exp(2*φ0) * χ1**2))
+    charge2_sqr = 6*np.exp(-4*u0+φ0) * q0**6 \
+                  * (1 + f0m2 * (1 - (1/6)*q0**2 * np.exp(2*φ0) * χ1**2))
 
-    # Regular solutions must have f0^2 > 0 and flux2^2 > 0
-    if f0m2 < 0 or flux2sqr < 0:
-        # Return values of f0m2 and flux2sqr for use in shooting method
-        return [f0m2, flux2sqr]
+    # Regular solutions must have f0^2 > 0 and charge2^2 > 0
+    if f0m2 < 0 or charge2_sqr < 0:
+        # Return values of f0m2 and charge2_sqr for use in shooting method
+        return [f0m2, charge2_sqr]
 
     f0 = f0m2**(-1/2)
-    flux2 = np.sqrt(flux2sqr)
+    charge2 = np.sqrt(charge2_sqr)
 
     # Use series solutions (e.g. u = u0 + 1/2*udd0 * r^2 + ...)
     # to get initial conditions at r=rmin << q0
     dVdu = dVdu_T11(u0, v0)
     dVdv = dVdv_T11(u0, v0)
-    flux_term_1 = flux2**2 * np.exp(4*u0-φ0) / q0**8
+    charge_term_1 = charge2**2 * np.exp(4*u0-φ0) / q0**8
 
-    udd0 = f0**2 * ( (1/16)*dVdu - (1/16)*dVdv + (1/8)*flux_term_1)
-    vdd0 = f0**2 * (-(1/16)*dVdu + (7/16)*dVdv - (1/8)*flux_term_1)
-    φdd0 = -np.exp(2*φ0)*χ1**2 - (1/2)*f0**2 * flux_term_1
+    udd0 = f0**2 * ( (1/16)*dVdu - (1/16)*dVdv + (1/8)*charge_term_1)
+    vdd0 = f0**2 * (-(1/16)*dVdu + (7/16)*dVdv - (1/8)*charge_term_1)
+    φdd0 = -np.exp(2*φ0)*χ1**2 - (1/2)*f0**2 * charge_term_1
 
     fdd0 = (f0**3 * q0**2 / 12) * (6*(3+f0**(-2))/q0**4 + udd0*dVdu + vdd0*dVdv)
     
@@ -485,15 +482,15 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-6, nr=1000):
     # Solve!
     soln = solve_ivp(ODEs_T11, (rmin, rmax),
                      y0=y0,
-                     args=(q0, flux2),
+                     args=(q0, charge2),
                      events=(f_event),  # halt if f gets too large
                      t_eval=np.geomspace(rmin, rmax, nr),
                      rtol=10**-8,
                      method='RK45'
                     )
 
-    # Return (r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2)
-    return [soln.t, *soln.y, flux2]
+    # Return (r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2)
+    return [soln.t, *soln.y, charge2]
 
 def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
     """Objective function to be minimized during T11 shooting method.
@@ -507,8 +504,8 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
     
     There are three cases, with a value of zero being optimal:
     
-      * The initial conditions are invalid, i.e. f0**(-2) < 0 or flux**2 < 0.
-            Returns C1 + |min(0, f0**(-2))| + |min(0, flux**2)| to drive
+      * The initial conditions are invalid, i.e. f0**(-2) < 0 or charge2**2 < 0.
+            Returns C1 + |min(0, f0**(-2))| + |min(0, charge2**2)| to drive
             towards admissible initial conditions.
       * The solution is singular, only reaching r=r_stop < rmax. Returns
             1 + C2*(rmax/r_stop - 1) + u_stop**2 + v_stop**2 to drive
@@ -547,7 +544,7 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
         value = 10**8 + abs(min(0, soln[0])) + abs(min(0, soln[1]))
     else:
         # Unpack solution
-        r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
+        r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2 = soln
 
         if r[-1] < rmax:
             # Singular solution: penalize to drive towards nonsingular
@@ -583,7 +580,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
     so that the solution matches on to AdS boundary conditions with u and v going
     to zero. Without loss of generality this optimization is done with the choice
     φ(r=0) = 0: an SL(2,R) transformation is performed at the end to ensure that φ
-    also goes to zero at infinity, in the process rescaling χ, dχ/dr and the flux.
+    also goes to zero at infinity, in the process rescaling χ, dχ/dr and the charge.
 
     Args:
         q0 (float): Wormhole size.
@@ -601,7 +598,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
 
     Returns:
         array: The numerical wormhole solution, (r, f, u, ud, v, vd, φ, φd,
-            χ, χd, h, flux2), where all but flux2 are arrays of length 2*nr-1
+            χ, χd, h, charge), where all but 'charge2' are arrays of length 2*nr-1
             (having been symmetrized on the domain -rmax < r < rmax).
     """
 
@@ -642,7 +639,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
 
     # Get numerical solution for optimial initial conditions
     soln = solve_T11(q0, *uv0_best, 0, χ1, rmax, rmin, nr)
-    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2 = soln
 
     # Use an SL(2,R) transformation to set φ(infty) = 0
     # First estimate the current value of φ(infty) by fitting
@@ -655,7 +652,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
     soln[6] -= φinf                 # Shift φ
     soln[8] *= np.exp(φinf)         # Rescale χ
     soln[9] *= np.exp(φinf)         # Rescale χd
-    soln[11] *= np.exp(-φinf/2)     # Rescale the flux
+    soln[11] *= np.exp(-φinf/2)     # Rescale the axion charge
 
     # Return symmetrized solution on -rmax < r < rmax
     return symmetrize_T11(soln), opt.fun
@@ -663,7 +660,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
 def symmetrize_T11(soln):
     """Extend T11 solutions from 0 < r < rmax to -rmax < r < rmax."""
 
-    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2 = soln
 
     # Make (anti-)symmetric about r=0
     r = np.append(-r[-1:0:-1], [r])
@@ -679,10 +676,10 @@ def symmetrize_T11(soln):
     φd = np.append(-φd[-1:0:-1], [φd])
     χd = np.append( χd[-1:0:-1], [χd])
 
-    return r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2
+    return r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2
 
 def massless_approx_T11(q0):
-    """Returns T11 field ranges and flux for V=-12."""
+    """Returns T11 field ranges and charge for V=-12."""
     
     # Taking h(0) = 0, first compute h(inf)
     h_inf, err = quad(lambda x: q0**-3 * x**3 * (q0**2 + x**2 - (1+q0**2)*x**8)**(-1/2),
@@ -692,15 +689,15 @@ def massless_approx_T11(q0):
     # φ = -4u = 4v has profile exp(φ) = cos(sqrt(-c/2)*h) / cos(sqrt(-c/2)*hinf),
     #   so φ(0) = -log[cos(sqrt(-c/2)*hinf)]
     c_abs = 24*q0**6 * (1+q0**2)
-    flux2 = np.sqrt(c_abs) / np.cos(np.sqrt(c_abs/2) * h_inf)
+    charge2 = np.sqrt(c_abs) / np.cos(np.sqrt(c_abs/2) * h_inf)
     φ0 = -np.log(np.cos(np.sqrt(c_abs/2) * h_inf))
     u0 = -φ0/4
     v0 = φ0/4
 
-    return u0, v0, φ0, flux2
+    return u0, v0, φ0, charge2
 
 def frozen_approx_T11(q0):
-    """Returns T11 field ranges and flux for u,v frozen to zero."""
+    """Returns T11 field ranges and charge for u,v frozen to zero."""
 
     # Taking h(0) = 0, first compute h(inf)
     h_inf, err = quad(lambda x: q0**-3 * x**3 * (q0**2 + x**2 - (1+q0**2)*x**8)**(-1/2),
@@ -710,10 +707,10 @@ def frozen_approx_T11(q0):
     # u=v=0 and exp(φ/2) = cos(1/2 * sqrt(-c)*h) / cos(1/2 * sqrt(-c)*hinf),
     #   so φ(0) = -2*log[cos(1/2 * sqrt(-c)*hinf)]
     c_abs = 24*q0**6 * (1 + q0**2)
-    flux2 = np.sqrt(c_abs) / np.cos(0.5*np.sqrt(c_abs) * h_inf)
+    charge2 = np.sqrt(c_abs) / np.cos(0.5*np.sqrt(c_abs) * h_inf)
     φ0 = -2*np.log(np.cos(0.5*np.sqrt(c_abs) * h_inf))
 
-    return 0, 0, φ0, flux2
+    return 0, 0, φ0, charge2
 
 def masslessScalarFit(r, ψinf, ψ4, ψ6):
     """Functional form of a massless scalar on T11, ψ, for r -> infty."""
@@ -728,7 +725,7 @@ def ricci_5D(q0, soln):
     """Returns the 5D Ricci scalar for a T11 wormhole of size q0."""
 
     # Unpack and get q(r) and q'(r)
-    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2 = soln
     q  =  Q(r, q0)
     qd = Qd(r, q0)
 
@@ -742,13 +739,13 @@ def ricci_10D(q0, soln):
     """Returns the 10D Ricci scalar for the uplift of a T11 wormhole of size q0."""
 
     # Unpack and get q(r)
-    r, f, u, ud, v, vd, φ, φd, χ, χd, h, flux2 = soln
+    r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2 = soln
     q = Q(r, q0)
 
     # Get 10D Ricci scalar as a function of r
     # (this has been simplified using the equations of motion)
     R10 = (1/4)*np.exp(2/3*(4*u+v)) * (2*(φd**2 - np.exp(2*φ)*χd**2)/f**2 \
-                                       + flux2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8)
+                                       + charge2**2 * np.exp(4*u+φ) * (χ**2 - np.exp(-2*φ)) / q**8)
 
     return R10
 
