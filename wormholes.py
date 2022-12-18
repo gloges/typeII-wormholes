@@ -1,10 +1,12 @@
-"""Construct wormhole solutions for massive type IIA on S3xS3 and for type IIB on T1,1."""
+"""Construct wormhole solutions for massive type IIA on S3xS3 and for type IIB on T(1,1)."""
 
 import numpy as np
 from scipy.integrate import solve_ivp, quad
 from scipy.optimize import minimize, curve_fit
 
 
+# Conformal dimensions for light/heavy linear combinations
+# of u and v which have mass-squareds 6 and 20.
 Δ1_S3S3 = (3/2) + np.sqrt((3/2)**2 + 6)
 Δ2_S3S3 = (3/2) + np.sqrt((3/2)**2 + 20)
 
@@ -22,13 +24,13 @@ def Qdd(r, q0):
     return q0**2 / Q(r, q0)**3
 
 def f_event(r, y, q0, charge):
-    """Stops integration if f >> 1/q (appropriate for AdS)."""
+    """Stops integration if f >> 1/q (appropriate for AdS BCs)."""
     f = y[0]
     return f - 3/Q(r, q0)
 f_event.terminal = True
 
 
-#SECTION - Wormhole solutions for massive type IIA on S3xS3
+#SECTION - massive type IIA on S3xS3
 
 def V_S3S3(u, φ):
     """Scalar potential V(u,φ) for S3xS3."""
@@ -101,7 +103,6 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-6, nr=1000):
             the numerical wormhole solution, (r, f, u, ud, φ, φd, h, charge),
             where all but 'charge' are arrays of length nr.
     """
-
 
     # Initial condition for f0 and the value of charge^2 are set by u0 and φ0 (f0m2 := f0**(-2))
     f0m2 = 2 - (1/2)*q0**2 * V_S3S3(u0, φ0)
@@ -227,12 +228,12 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
         xatol (float, optional): Option for Nelder-Mead method. Defaults to 10**-12.
         display_summary (bool, optional): Display summary information about
             shooting method. Defaults to False.
-        display_progress (bool, optional): Display step-by-step information about
+        display_progress (bool, optional): Display step-by-step information during
             shooting method. Defaults to False.
 
     Returns:
         array: The numerical wormhole solution, (r, f, u, ud, φ, φd, h, charge),
-            where all but 'charge' are arrays of length 2*nr-1 (having been
+            where all but 'charge' are arrays of length 2*nr (having been
             symmetrized on the domain -rmax < r < rmax).
     """
 
@@ -290,7 +291,7 @@ def symmetrize_S3S3(soln):
     return r, f, u, ud, φ, φd, h, charge
 
 def massless_approx_S3S3(q0):
-    """Returns (u0,φ0) and charge for the massless "approximation" (assuming u,φ vanish at infinity)."""
+    """Returns (u0,φ0) and charge for the massless "approximation" (taking u,φ to vanish at infinity)."""
     
     # Taking h(0) = 0, first compute h(inf)
     h_inf, err = quad(lambda x: q0**-2 * x**2 * (q0**2 + x**2 - (1+q0**2)*x**6)**(-1/2),
@@ -306,48 +307,53 @@ def massless_approx_S3S3(q0):
 
     return u0, φ0, charge
 
-def myLightMode_S3S3(q, a, b):
-    return a + b/q**(6-Δ1_S3S3)
+def myLightMode_S3S3(r, a, b):
+    """Fitting function for a rescaling of the light S3xS3 mode, (r^Δ1)*(5φ-6u), for r->infty."""
+    return a + b/r**(6-Δ1_S3S3)
 
-def fitLightMode_S3S3(q0, r, u, φ, mask):
+def fitLightMode_S3S3(r, u, φ, mask):
+    """Returns fit and string for the light S3xS3 mode, 5φ-6u, for data where mask=True."""
 
-    q = Q(r, q0)
+    # Fit (r^Δ1)*(5φ-6u) to a function of the form a+b/r^(6-Δ1)
     popt, pcov = curve_fit(myLightMode_S3S3,
-                           q[mask],
-                           q[mask]**Δ1_S3S3 * (5*φ[mask]-6*u[mask])
+                           r[mask],
+                           r[mask]**Δ1_S3S3 * (5*φ[mask]-6*u[mask])
                           )
     
     rr = np.geomspace(min(r[mask]), max(r[mask]), 1000)
-    ff = myLightMode_S3S3(Q(rr, q0), *popt) / Q(rr, q0)**Δ1_S3S3
+    ff = myLightMode_S3S3(rr, *popt) / rr**Δ1_S3S3
 
+    # Create a formatted string of the best-fit function
     a, b = popt
-    label = f'$({a:.2f})$' + r'$/r^{\Delta_1}$' + f'$+({b:.2f})$' + r'$/r^6$'
+    label = f'$({a:.2f})$' + r'$/r^{\Delta_1}$' + f'$+({b:.2f})/r^6$'
 
     return rr, ff, label
 
-def myHeavyMode_S3S3(q, a, b):
-    return a + b/q**(Δ2_S3S3-6)
+def myHeavyMode_S3S3(r, a, b):
+    """Fitting function for a rescaling of the heavy S3xS3 mode, (r^6)*(-φ-10u), for r->infty."""
+    return a + b/r**(Δ2_S3S3-6)
 
-def fitHeavyMode_S3S3(q0, r, u, φ, mask):
+def fitHeavyMode_S3S3(r, u, φ, mask):
+    """Returns fit and string for the heavy S3xS3 mode, -φ-10u, for data where mask=True."""
 
-    q = Q(r, q0)
+    # Fit (r^6)*(-φ-10u) to a function of the form a+b/q^(Δ2-6)
     popt, pcov = curve_fit(myHeavyMode_S3S3,
-                           q[mask],
-                           q[mask]**6 * (-φ[mask]-10*u[mask])
+                           r[mask],
+                           r[mask]**6 * (-φ[mask]-10*u[mask])
                           )
     
     rr = np.geomspace(min(r[mask]), max(r[mask]), 1000)
-    ff = myHeavyMode_S3S3(Q(rr, q0), *popt) / Q(rr, q0)**6
+    ff = myHeavyMode_S3S3(rr, *popt) / rr**6
 
+    # Create a formatted string of the best-fit function
     a, b = popt
-    label = f'$({a:.2f})/r^6$' + f'$+({b:.2f})$' + r'$/r^{\Delta_2}$'
+    label = f'$({a:.2f})/r^6+({b:.2f})$' + r'$/r^{\Delta_2}$'
 
     return rr, ff, label
-
 
 #!SECTION
 
-#SECTION - Wormhole solutions for type IIB on T11
+#SECTION - type IIB on T11
 
 def V_T11(u, v):
     """Scalar potential V(u,v) for T11."""
@@ -514,11 +520,11 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
       * The solution reaches r=rmax. Returns 1 - 1/(1 + uvinf**2 + uinf**2),
             where uvinf = (u+0.25v)(r=infty) and vinf = v(r=infty) are
             estimated using the known power-law behaviors of the scalars.
-            Checking these two conditions is enough to ensure the other
-            boundary conditions are satisfied.
+            Checking these two conditions is (in practice) enough to ensure
+            the other boundary conditions are satisfied as well.
 
     Args:
-        uv0 (list): Initial conditions for u and v at r=0, uv0=(u0, v0).
+        uv0 (list): Initial conditions for u and v at r=0, uv0=(u0,v0).
         q0 (float): Wormhole size.
         χ1 (float): Initial condition for dχ/dr at r=0.
         rmax (float): End point of integration.
@@ -535,9 +541,8 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
     u0, v0 = uv0
 
     # Solve EoMs for given ICs. Can pick φ0 = 0 wlg and perform
-    # an SL(2,R) transformation to ensure φ(infty) = 0.
+    # an SL(2,R) transformation to ensure φ(infty) = 0 afterwards.
     soln = solve_T11(q0, u0, v0, 0, χ1, rmax, rmin)
-
 
     if len(soln) == 2:
         # ICs are invalid (i.e. f0^(-2) < 0): set value to drive towards admissible ICs
@@ -557,14 +562,10 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
             # u,v ~ 1/r^6 and u+0.25v ~ log(r)/r^8 (ignore log factor for simplicity)
 
             uvinf_est = (u[-1] + 0.25*v[-1]) + r[-1]*(ud[-1] + 0.25*vd[-1])/8
-            # uinf_est = u[-1] + r[-1]*ud[-1]/6
             vinf_est = v[-1] + r[-1]*vd[-1]/6
-            # φinf_est = φ[-1] + r[-1]*φd[-1]/4
-            # χdinf_est = χd[-1] + r[-1]*((χd[-1] - χd[-2])/(r[-1] - r[-2]))/5
 
             # Reward when the extrapolated values (u+0.25v)(infty) and v(infty) are small
             value = 1 - 1/(1 + uvinf_est**2 + vinf_est**2)
-
 
     # Print ICs and objective function
     if display_progress:
@@ -593,13 +594,14 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
         xatol (float, optional): Option for Nelder-Mead method. Defaults to 10**-12.
         display_summary (bool, optional): Display summary information about
             shooting method. Defaults to False.
-        display_progress (bool, optional): Display step-by-step information about
+        display_progress (bool, optional): Display step-by-step information during
             shooting method. Defaults to False.
 
     Returns:
         array: The numerical wormhole solution, (r, f, u, ud, v, vd, φ, φd,
-            χ, χd, h, charge), where all but 'charge2' are arrays of length 2*nr-1
+            χ, χd, h, charge), where all but 'charge2' are arrays of length 2*nr
             (having been symmetrized on the domain -rmax < r < rmax).
+        float: Final value of the objective function.
     """
 
     if display_summary:
@@ -645,16 +647,17 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
     # First estimate the current value of φ(infty) by fitting
     # the tail of the profile to a function A + B/r^4 + C/r^6
     mask = (r > rmax/1.5)
-    popt, pcov = curve_fit(masslessScalarFit, r[mask]/q0, φ[mask])
+    popt, pcov = curve_fit(myMassless_T11, r[mask]/q0, φ[mask])
     φinf = popt[0]
 
     # Next perform the transformation
-    soln[6] -= φinf                 # Shift φ
-    soln[8] *= np.exp(φinf)         # Rescale χ
-    soln[9] *= np.exp(φinf)         # Rescale χd
+    soln[6]  -= φinf                # Shift φ
+    soln[8]  *= np.exp(φinf)        # Rescale χ
+    soln[9]  *= np.exp(φinf)        # Rescale χd
     soln[11] *= np.exp(-φinf/2)     # Rescale the axion charge
 
     # Return symmetrized solution on -rmax < r < rmax
+    # and final value of objective function
     return symmetrize_T11(soln), opt.fun
 
 def symmetrize_T11(soln):
@@ -679,7 +682,7 @@ def symmetrize_T11(soln):
     return r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2
 
 def massless_approx_T11(q0):
-    """Returns T11 field ranges and charge for V=-12."""
+    """Returns (u0,v0,φ0) and charge for the massless "approximation" (taking u,v,φ to vanish at infinity)."""
     
     # Taking h(0) = 0, first compute h(inf)
     h_inf, err = quad(lambda x: q0**-3 * x**3 * (q0**2 + x**2 - (1+q0**2)*x**8)**(-1/2),
@@ -697,7 +700,7 @@ def massless_approx_T11(q0):
     return u0, v0, φ0, charge2
 
 def frozen_approx_T11(q0):
-    """Returns T11 field ranges and charge for u,v frozen to zero."""
+    """Returns (u0,v0,φ0) and charge for the "frozen approximation" (taking φ to vanish at infinity)."""
 
     # Taking h(0) = 0, first compute h(inf)
     h_inf, err = quad(lambda x: q0**-3 * x**3 * (q0**2 + x**2 - (1+q0**2)*x**8)**(-1/2),
@@ -712,14 +715,76 @@ def frozen_approx_T11(q0):
 
     return 0, 0, φ0, charge2
 
-def masslessScalarFit(r, ψinf, ψ4, ψ6):
-    """Functional form of a massless scalar on T11, ψ, for r -> infty."""
+def myMassless_T11(r, ψinf, ψ4, ψ6):
+    """Functional form for any massless scalar ψ on T11, for r->infty."""
     return ψinf + ψ4/r**4 + ψ6/r**6
 
-def masslessScalarFit_alt(r, ψ4, ψ6):
+def myMasslessDeriv_T11(r, ψ4, ψ6):
     """Functional form of r^5(dψ/dr) if ψ ~ 0 + ψ4/r^4 + ψ6/r^6
-    is a massless scalar on T11 which goes to zero for r -> infty."""
+    is any massless scalar on T11 which goes to zero for r->infty."""
     return -4*ψ4 - 6*ψ6/r**2
+
+def myLightMode_T11(r, a, b):
+    """Fitting function for a rescaling of the light T11 mode, (r^6)*(-u+v), for r->infty."""
+    return a + b/r**2
+
+def fitLightMode_T11(r, u, v, mask):
+    """Returns fit and string for the light T11 mode, -u+v, for data where mask=True."""
+
+    # Fit (r^6)*(-u+v) to a function of the form a+b/r^2
+    popt, pcov = curve_fit(myLightMode_T11,
+                           r[mask],
+                           r[mask]**6 * (-u[mask]+v[mask])
+                          )
+    
+    rr = np.geomspace(min(r[mask]), max(r[mask]), 1000)
+    ff = myLightMode_T11(rr, *popt) / rr**6
+
+    # Create a formatted string of the best-fit function
+    a, b = popt
+    label = f'$({a:.2f})/r^6+({b:.2f})/r^8$'
+
+    return rr, ff, label
+
+def myHeavyMode_T11(r, a, b):
+    """Fitting function for a rescaling of the heavy T11 mode, (r^8)*(-4u-v), for r->infty."""
+    return a*np.log(r/b)
+
+def fitHeavyMode_T11(r, u, v, mask):
+    """Returns fit and string for the heavy T11 mode, -4u-v, for data where mask=True."""
+
+    # Fit (r^8)*(-4u-v) to a function of the form a*log(r/b)
+    popt, pcov = curve_fit(myHeavyMode_T11,
+                           r[mask],
+                           r[mask]**8 * (-4*u[mask]-v[mask])
+                          )
+    
+    rr = np.geomspace(min(r[mask]), max(r[mask]), 1000)
+    ff = myHeavyMode_T11(rr, *popt) / rr**8
+
+    # Create a formatted string of the best-fit function
+    a, b = popt
+    label = f'$({a:.2f})\log(r/{b:.2f})/r^8$'
+
+    return rr, ff, label
+
+def fitMassless_T11(r, ψ, mask):
+    """Returns fit and string for a massless scalar on T11 which goes to zero for r->infty, for data where mask=True."""
+
+    # Fit (r^4)*ψ to a function of the form a+b/r^2
+    popt, pcov = curve_fit(myLightMode_T11,
+                           r[mask],
+                           r[mask]**4 * ψ[mask]
+                          )
+    
+    rr = np.geomspace(min(r[mask]), max(r[mask]), 1000)
+    ff = myLightMode_T11(rr, *popt) / rr**4
+
+    # Create a formatted string of the best-fit function
+    a, b = popt
+    label = f'$({a:.2f})/r^4+({b:.2f})/r^6$'
+
+    return rr, ff, label
 
 def ricci_5D(q0, soln):
     """Returns the 5D Ricci scalar for a T11 wormhole of size q0."""
@@ -736,7 +801,7 @@ def ricci_5D(q0, soln):
     return R5
 
 def ricci_10D(q0, soln):
-    """Returns the 10D Ricci scalar for the uplift of a T11 wormhole of size q0."""
+    """Returns the 10D Ricci scalar (times l^2) for the uplift of a T11 wormhole of size q0."""
 
     # Unpack and get q(r)
     r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2 = soln
