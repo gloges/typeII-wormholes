@@ -6,7 +6,7 @@ from scipy.optimize import minimize, curve_fit
 
 
 # Conformal dimensions for light/heavy linear combinations
-# of u and v which have mass-squareds 6 and 20.
+# of u and φ for S3xS3 which have mass-squareds 6 and 20.
 Δ1_S3S3 = (3/2) + np.sqrt((3/2)**2 + 6)
 Δ2_S3S3 = (3/2) + np.sqrt((3/2)**2 + 20)
 
@@ -80,7 +80,7 @@ def ODEs_S3S3(r, y, q0, charge):
     # Return derivatives of f, u, ud, φ, φd and h
     return f_d, u_d, ud_d, φ_d, φd_d, h_d
 
-def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-6, nr=1000):
+def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-6, nr=1000, rtol=10**-8):
     """Solves the equations of motion for S3xS3.
 
     After specifying the wormhole size, q0, and initial conditions
@@ -96,6 +96,8 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-6, nr=1000):
             the singular equations of motion at r=0. Defaults to 10**-6.
         nr (int, optional): Number of geometrically-spaced values for r>0
             at which to evaluate the solution. Defaults to 1000.
+        rtol (float, optional): Relative tolerance used for solve_ivp()
+            with RK45 method. Defaults to 10**-8.
 
     Returns:
         array: If the initial conditions are invalid because f0**(-2) < 0,
@@ -136,14 +138,14 @@ def solve_S3S3(q0, u0, φ0, rmax, rmin=10**-6, nr=1000):
                      args=(q0, charge),
                      events=(f_event),  # halt if f gets too large
                      t_eval=np.geomspace(rmin, rmax, nr),
-                     rtol=10**-8,
+                     rtol=rtol,
                      method='RK45'
                     )
 
     # Return (r, f, u, ud, φ, φd, h, charge)
     return [soln.t, *soln.y, charge]
 
-def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
+def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, rtol=10**-8, display_progress=False):
     """Objective function to be minimized during S3xS3 shooting method.
 
     This function quantifies how well the solution of the equations of
@@ -157,8 +159,8 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
     
       * The initial conditions are invalid, i.e. f0**(-2) < 0. Returns
             C1 + |f0**(-2)| to drive towards admissible initial conditions.
-      * The solution is singular, only reaching r=r_stop < rmax. Returns
-            1 + C2*(rmax/r_stop - 1) + u_stop**2 + φ_stop**2 to drive
+      * The solution is singular, only reaching r=r_div < rmax. Returns
+            1 + C2*(rmax/r_div - 1) + u_div**2 + φ_div**2 to drive
             towards parameters for which the solution is nonsingular
             with u and φ approaching zero.
       * The solution reaches r=rmax. Returns 1 - 1/(1 + φinf**2 + uφinf**2),
@@ -171,7 +173,9 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
         rmax (float): End point of integration.
         rmin (float, optional): Start point of integration, regularizing
             the singular equations of motion at r=0. Defaults to 10**-6.
-        display_progress (bool, optional): To display u0, φ0, r_stop
+        rtol (float, optional): Relative tolerance used for solve_ivp()
+            with RK45 method. Defaults to 10**-8.
+        display_progress (bool, optional): To display u0, φ0, r_div
             and resulting value of the objective function. Defaults to False.
 
     Returns:
@@ -179,7 +183,7 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
     """
 
     # Solve EoMs for given ICs
-    soln = solve_S3S3(q0, *uφ0, rmax, rmin)
+    soln = solve_S3S3(q0, *uφ0, rmax, rmin, rtol=rtol)
 
     if len(soln) == 1:
         # ICs are invalid (i.e. f0^(-2) < 0): set value to drive towards admissible ICs
@@ -210,7 +214,7 @@ def objective_S3S3(uφ0, q0, rmax, rmin=10**-6, display_progress=False):
 
     return value
 
-def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
+def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, rtol=10**-8, xatol=10**-12,
                   display_summary=False, display_progress=False):
     """Finds a S3xS3 wormhole of size q0.
 
@@ -225,6 +229,8 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
             the singular equations of motion at r=0. Defaults to 10**-6.
         nr (int, optional): Number of geometrically-spaced values for r>0
             at which to evaluate the solution. Defaults to 1000.
+        rtol (float, optional): Relative tolerance used for solve_ivp()
+            with RK45 method. Defaults to 10**-8.
         xatol (float, optional): Option for Nelder-Mead method. Defaults to 10**-12.
         display_summary (bool, optional): Display summary information about
             shooting method. Defaults to False.
@@ -235,6 +241,7 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
         array: The numerical wormhole solution, (r, f, u, ud, φ, φd, h, charge),
             where all but 'charge' are arrays of length 2*nr (having been
             symmetrized on the domain -rmax < r < rmax).
+        float: Final value of the objective function.
     """
 
     if display_summary:
@@ -251,7 +258,7 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
 
     for rm, xat in zip(rmax_list, xatol_list):
         # Shooting method: optimize (u0,φ0) to match AdS BCs
-        opt = minimize(lambda uφ0: objective_S3S3(uφ0, q0, rm, rmin, display_progress),
+        opt = minimize(lambda uφ0: objective_S3S3(uφ0, q0, rm, rmin, rtol, display_progress),
                        x0=uφ0_best,
                        method='Nelder-Mead',
                        options={'maxfev': 1000, 'xatol': xat}
@@ -264,14 +271,15 @@ def wormhole_S3S3(q0, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
         print('{:>14} : {}'.format('success', opt.success))
         print('{:>14} : {}'.format('f_eval', opt.nfev))
         print('{:>14} : {:+.10f}'.format('u0', uφ0_best[0]))
-        print('{:>14} : {:+.10f}'.format('v0', uφ0_best[1]))
+        print('{:>14} : {:+.10f}'.format('φ0', uφ0_best[1]))
         print('{:>14} : {:.10g}'.format('value', opt.fun))
 
     # Get numerical solution for optimial initial conditions
-    soln = solve_S3S3(q0, *uφ0_best, rmax, rmin, nr)
+    soln = solve_S3S3(q0, *uφ0_best, rmax, rmin, nr, rtol)
 
     # Return symmetrized solution on -rmax < r < rmax
-    return symmetrize_S3S3(soln)
+    # and final value of objective function
+    return symmetrize_S3S3(soln), opt.fun
 
 def symmetrize_S3S3(soln):
     """Extend S3xS3 solutions from 0 < r < rmax to -rmax < r < rmax."""
@@ -413,7 +421,7 @@ def ODEs_T11(r, y, q0, charge2):
     # Return derivatives of f, u, ud, v, vd, φ, φd, χ, χd and h
     return f_d, u_d, ud_d, v_d, vd_d, φ_d, φd_d, χ_d, χd_d, h_d
 
-def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-6, nr=1000):
+def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-6, nr=1000, rtol=10**-8):
     """Solves the equations of motion for T11.
 
     After specifying the wormhole size, q0, and initial conditions
@@ -431,6 +439,8 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-6, nr=1000):
             the singular equations of motion at r=0. Defaults to 10**-6.
         nr (int, optional): Number of geometrically-spaced values for r>0
             at which to evaluate the solution. Defaults to 1000.
+        rtol (float, optional): Relative tolerance used for solve_ivp()
+            with RK45 method. Defaults to 10**-8.
 
     Returns:
         array: If the initial conditions are invalid (either f0**-2 < 0
@@ -491,14 +501,14 @@ def solve_T11(q0, u0, v0, φ0, χ1, rmax, rmin=10**-6, nr=1000):
                      args=(q0, charge2),
                      events=(f_event),  # halt if f gets too large
                      t_eval=np.geomspace(rmin, rmax, nr),
-                     rtol=10**-8,
+                     rtol=rtol,
                      method='RK45'
                     )
 
     # Return (r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2)
     return [soln.t, *soln.y, charge2]
 
-def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
+def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, rtol=10**-8, display_progress=False):
     """Objective function to be minimized during T11 shooting method.
 
     This function quantifies how well the solution of the equations of
@@ -513,8 +523,8 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
       * The initial conditions are invalid, i.e. f0**(-2) < 0 or charge2**2 < 0.
             Returns C1 + |min(0, f0**(-2))| + |min(0, charge2**2)| to drive
             towards admissible initial conditions.
-      * The solution is singular, only reaching r=r_stop < rmax. Returns
-            1 + C2*(rmax/r_stop - 1) + u_stop**2 + v_stop**2 to drive
+      * The solution is singular, only reaching r=r_div < rmax. Returns
+            1 + C2*(rmax/r_div - 1) + u_div**2 + v_div**2 to drive
             towards parameters for which the solution is nonsingular
             with u and v approaching zero.
       * The solution reaches r=rmax. Returns 1 - 1/(1 + uvinf**2 + uinf**2),
@@ -530,7 +540,9 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
         rmax (float): End point of integration.
         rmin (float, optional): Start point of integration, regularizing
             the singular equations of motion at r=0. Defaults to 10**-6.
-        display_progress (bool, optional): To display u0, v0, r_stop
+        rtol (float, optional): Relative tolerance used for solve_ivp()
+            with RK45 method. Defaults to 10**-8.
+        display_progress (bool, optional): To display u0, v0, r_div
             and resulting value of the objective function. Defaults to False.
 
     Returns:
@@ -542,7 +554,7 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
 
     # Solve EoMs for given ICs. Can pick φ0 = 0 wlg and perform
     # an SL(2,R) transformation to ensure φ(infty) = 0 afterwards.
-    soln = solve_T11(q0, u0, v0, 0, χ1, rmax, rmin)
+    soln = solve_T11(q0, u0, v0, 0, χ1, rmax, rmin, rtol=rtol)
 
     if len(soln) == 2:
         # ICs are invalid (i.e. f0^(-2) < 0): set value to drive towards admissible ICs
@@ -573,7 +585,7 @@ def objective_T11(uv0, q0, χ1, rmax, rmin=10**-6, display_progress=False):
 
     return value
 
-def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
+def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, rtol=10**-8, xatol=10**-12,
                  display_summary=False, display_progress=False):
     """Finds a T11 wormhole of size q0.
 
@@ -591,6 +603,8 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
             the singular equations of motion at r=0. Defaults to 10**-6.
         nr (int, optional): Number of geometrically-spaced values for r>0
             at which to evaluate the solution. Defaults to 1000.
+        rtol (float, optional): Relative tolerance used for solve_ivp()
+            with RK45 method. Defaults to 10**-8.
         xatol (float, optional): Option for Nelder-Mead method. Defaults to 10**-12.
         display_summary (bool, optional): Display summary information about
             shooting method. Defaults to False.
@@ -619,7 +633,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
     
     for rm, xat in zip(rmax_list, xatol_list):
         # Shooting method: optimize (u0,v0) to match AdS BCs
-        opt = minimize(lambda uv0: objective_T11(uv0, q0, χ1, rm, rmin, display_progress),
+        opt = minimize(lambda uv0: objective_T11(uv0, q0, χ1, rm, rmin, rtol, display_progress),
                        x0=uv0_best,
                        method='Nelder-Mead',
                        options={'maxfev': 1000, 'xatol': xat}
@@ -640,7 +654,7 @@ def wormhole_T11(q0, χ1, rmax, rmin=10**-6, nr=1000, xatol=10**-12,
         print('{:>14} : {:.10g}'.format('value', opt.fun))
 
     # Get numerical solution for optimial initial conditions
-    soln = solve_T11(q0, *uv0_best, 0, χ1, rmax, rmin, nr)
+    soln = solve_T11(q0, *uv0_best, 0, χ1, rmax, rmin, nr, rtol)
     r, f, u, ud, v, vd, φ, φd, χ, χd, h, charge2 = soln
 
     # Use an SL(2,R) transformation to set φ(infty) = 0
@@ -786,7 +800,7 @@ def fitMassless_T11(r, ψ, mask):
 
     return rr, ff, label
 
-def ricci_5D(q0, soln):
+def ricci5D_T11(q0, soln):
     """Returns the 5D Ricci scalar for a T11 wormhole of size q0."""
 
     # Unpack and get q(r) and q'(r)
@@ -800,7 +814,7 @@ def ricci_5D(q0, soln):
 
     return R5
 
-def ricci_10D(q0, soln):
+def ricci10D_T11(q0, soln):
     """Returns the 10D Ricci scalar (times l^2) for the uplift of a T11 wormhole of size q0."""
 
     # Unpack and get q(r)

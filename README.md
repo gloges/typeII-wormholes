@@ -30,7 +30,7 @@ In both cases the metric ansatz is taken to be
 
 $$ \mathrm{d}s_d^2 = f^2\mathrm{d}{r^2} + q^2\mathrm{d}\Omega_{d-1}^2 \qquad q(r) = \sqrt{q_0^2 + r^2} $$
 
-so that the coordinate $r$ covers the full wormhole. Numerical AdS wormhole solutions to the equations of motion are found using a shooting method; initial values for $f$ and the scalars at $r=0$ are chosen so that solutions are smooth across $r=0$ (care is needed because $q'(0)=0$) and are parity even/odd. These initial values are then adjusted so that integrating out to large $r$ the solutions may be matched onto AdS boundary conditions ($rf\to 1$ and $u,v,\phi\to0$ for $r\to\infty$).
+so that the coordinate $r$ covers the full wormhole. Numerical AdS wormhole solutions to the equations of motion are found using a shooting method; initial values for $f$ and the scalars at $r=0$ are chosen so that solutions are smooth across $r=0$ (care is needed because $q'(0)=0$) and are parity even/odd. These initial values are then adjusted so that integrating out to large $r$ the solutions may be matched onto AdS boundary conditions, $rf\to 1$ and $u,v,\phi\to0$ for $r\to\infty$.
 
 ---
 ## Contents overview
@@ -41,4 +41,4 @@ so that the coordinate $r$ covers the full wormhole. Numerical AdS wormhole solu
 
 - [wormholes.ipynb](https://github.com/gloges/typeII-wormholes/blob/main/wormholes.ipynb): Analysis and plots.
 
-The functions [solve_S3S3()](./wormholes.py#L83) and [solve_T11()](./wormholes.py#L416) solve the equations of motion for given wormhole size and initial conditions. Without fine-tuning the initial conditions the geometry quickly becomes singular or the scalars diverge. The functions [wormhole_S3S3()](./wormholes.py#L213) and [wormhole_T11()](./wormholes.py#L576) return wormhole solutions of size $q_0$ after using a shooting method to optimize the initial conditions.
+The functions [solve_S3S3()](./wormholes.py#L83) and [solve_T11()](./wormholes.py#L424) solve the equations of motion for given wormhole size and initial conditions. Without fine-tuning the initial conditions the geometry quickly becomes singular or the scalars diverge. The functions [wormhole_S3S3()](./wormholes.py#L217) and [wormhole_T11()](./wormholes.py#L588) return wormhole solutions of size $q_0$ after using a shooting method to optimize the initial conditions.
