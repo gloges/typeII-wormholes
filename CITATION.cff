@@ -1,0 +1,20 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: Type II AdS Wormholes
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Gregory J.
+    family-names: Loges
+    email: gloges@post.kek.jp
+    affiliation: KEK
+    orcid: 'https://orcid.org/0000-0003-0931-7170'
+identifiers:
+  - type: other
+    value: 'arXiv:2302.xxxxx'
+    description: ArXiv number of accompanying preprint
+repository-code: 'https://github.com/gloges/typeII-wormholes'
