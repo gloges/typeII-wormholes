@@ -4,7 +4,7 @@ Construction of numerical wormhole solutions of type II SUGRA for both massive t
 
 ### For more information see our preprint:
 
->Gregory J. Loges, Gary Shiu and Thomas Van Riet, _A 10d construction of Euclidean axion wormholes in flat and AdS space_, arXiv:[xxxx.xxxxx](https://arxiv.org/abs/xxxx.xxxxx).
+>Gregory J. Loges, Gary Shiu and Thomas Van Riet, _A 10d construction of Euclidean axion wormholes in flat and AdS space_, arXiv:[2302.03688](https://arxiv.org/abs/2302.03688).
 
 ---
 ## Brief background
