@@ -4,7 +4,7 @@ Construction of numerical wormhole solutions of type II SUGRA for both massive t
 
 ### For more information see our preprint:
 
->Gregory J. Loges, Gary Shiu and Thomas Van Riet, _A 10d construction of Euclidean axion wormholes in flat and AdS space_, arXiv:[xxxx.xxxxx](https://arxiv.org/abs/xxxx.xxxxx).
+>Gregory J. Loges, Gary Shiu and Thomas Van Riet, _A 10d construction of Euclidean axion wormholes in flat and AdS space_, arXiv:[2302.03688](https://arxiv.org/abs/2302.03688).
 
 ---
 ## Brief background
@@ -39,6 +39,10 @@ so that the coordinate $r$ covers the full wormhole. Numerical AdS wormhole solu
 
 - [wormholes.py](https://github.com/gloges/typeII-wormholes/blob/main/wormholes.py): Implementation of the equations of motion and shooting method, as well as some functionality for extracting the dual one-point functions.
 
-- [wormholes.ipynb](https://github.com/gloges/typeII-wormholes/blob/main/wormholes.ipynb): Analysis and plots.
+- [wh_examples.ipynb](https://github.com/gloges/typeII-wormholes/blob/main/wh_examples.ipynb): Demonstrates functionality of [wormholes.py](https://github.com/gloges/typeII-wormholes/blob/main/wormholes.py) with examples of numerically constructed wormholes, both with and without the shooting method.
+
+- [wh_plots.ipynb](https://github.com/gloges/typeII-wormholes/blob/main/wh_plots.ipynb): High-res images of wormhole profiles and two-dimensional parameter space, for use in paper.
+
+- [wh_animation.ipynb](https://github.com/gloges/typeII-wormholes/blob/main/wh_animation.ipynb): Plots of $T^{1,1}$ wormholes along a rectangular path in parameter space, for use in an animation.
 
 The functions [solve_S3S3()](./wormholes.py#L83) and [solve_T11()](./wormholes.py#L424) solve the equations of motion for given wormhole size and initial conditions. Without fine-tuning the initial conditions the geometry quickly becomes singular or the scalars diverge. The functions [wormhole_S3S3()](./wormholes.py#L217) and [wormhole_T11()](./wormholes.py#L588) return wormhole solutions of size $q_0$ after using a shooting method to optimize the initial conditions.
